@@ -22,6 +22,7 @@ import (
 	"github.com/go-logr/logr"
 	//"golang.org/x/tools/godoc/redirect"
 	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -130,18 +131,58 @@ func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, rcs *Red
 			Namespace: rcs.RedisCluster.Namespace,
 		},
 		Spec: v1.StatefulSetSpec{
-			//			Replicas:
+			Replicas: &rcs.RedisCluster.Spec.Replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"rediscluster": rcs.RedisCluster.Name},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"rediscluster": rcs.RedisCluster.Name},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						corev1.Container{
+							Name:  "redis-inst",
+							Image: "redis:5.0.5",
+							Ports: []corev1.ContainerPort{
+								corev1.ContainerPort{
+									Name:          "client",
+									ContainerPort: 6379,
+								},
+								corev1.ContainerPort{
+									Name:          "gossip",
+									ContainerPort: 16379,
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								corev1.VolumeMount{
+									Name:      "config",
+									MountPath: "/conf",
+								},
+								corev1.VolumeMount{
+									Name:      "data",
+									MountPath: "/data",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						corev1.Volume{
+							Name: "config",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						corev1.Volume{
+							Name: "data",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+					},
+				},
+			},
 		},
 	}
 	return redisStatefulSet
 }
-
-/*
-   	metav1.TypeMeta `json:",inline"`
-	// +optional
-	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-
-	// Spec defines the desired identities of pods in this set.
-	// +optional
-	Spec StatefulSetSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
-*/
