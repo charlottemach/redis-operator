@@ -141,25 +141,25 @@ func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, rcs *Red
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
-						corev1.Container{
+						{
 							Name:  "redis-inst",
 							Image: "redis:5.0.5",
 							Ports: []corev1.ContainerPort{
-								corev1.ContainerPort{
+								{
 									Name:          "client",
 									ContainerPort: 6379,
 								},
-								corev1.ContainerPort{
+								{
 									Name:          "gossip",
 									ContainerPort: 16379,
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
-								corev1.VolumeMount{
+								{
 									Name:      "config",
 									MountPath: "/conf",
 								},
-								corev1.VolumeMount{
+								{
 									Name:      "data",
 									MountPath: "/data",
 								},
@@ -167,13 +167,13 @@ func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, rcs *Red
 						},
 					},
 					Volumes: []corev1.Volume{
-						corev1.Volume{
+						{
 							Name: "config",
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
 							},
 						},
-						corev1.Volume{
+						{
 							Name: "data",
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},

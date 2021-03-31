@@ -20,6 +20,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -94,6 +95,11 @@ var _ = BeforeSuite(func() {
 	}()
 
 	Expect(k8sClient.Create(context.Background(), cluster)).Should(Succeed())
+	time.Sleep(time.Second * 15)
+
+	// sset := &v1.StatefulSet{}
+	// err = k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name + "cluster-inst", Namespace: "default"}, sset)
+	// Expect(err).ToNot(HaveOccurred())
 
 }, 60)
 
