@@ -29,6 +29,7 @@ import (
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	redisv1alpha1 "github.com/containersolutions/redis-operator/api/v1alpha1"
@@ -48,7 +49,7 @@ type RedisClusterStatefulSet struct {
 }
 
 func (r *RedisClusterStatefulSet) GetName() string {
-	return r.RedisCluster.Name + "-cluster-inst"
+	return r.RedisCluster.Name // + "-cluster-inst"
 }
 
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters,verbs=get;list;watch;create;update;patch;delete
@@ -90,10 +91,13 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	err, sset := r.FindExistingStatefulSet(ctx, req)
 	if err != nil {
+		r.Log.Error(err, "StatefulSet not found. ")
 		if errors.IsNotFound(err) {
 			// create stateful set
-			r.CreateStatefulSet(ctx, &rcs)
-
+			create_err := r.Client.Create(ctx, r.CreateStatefulSet(ctx, &rcs))
+			if create_err != nil {
+				return reconcile.Result{}, create_err
+			}
 		} else {
 			r.Log.Error(err, "Getting statefulset data failed")
 			return ctrl.Result{}, nil

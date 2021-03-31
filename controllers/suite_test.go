@@ -24,6 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,6 +35,7 @@ import (
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	//+kubebuilder:scaffold:imports
 )
@@ -95,11 +97,7 @@ var _ = BeforeSuite(func() {
 	}()
 
 	Expect(k8sClient.Create(context.Background(), cluster)).Should(Succeed())
-	time.Sleep(time.Second * 15)
-
-	// sset := &v1.StatefulSet{}
-	// err = k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name + "cluster-inst", Namespace: "default"}, sset)
-	// Expect(err).ToNot(HaveOccurred())
+	time.Sleep(time.Second * 5)
 
 }, 60)
 
@@ -109,6 +107,26 @@ var _ = AfterSuite(func() {
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 
+})
+
+var _ = Describe("Reconciler", func() {
+	Context("CRD object", func() {
+		When("CRD is submitted", func() {
+			It("Can be found", func() {
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, &v1alpha1.RedisCluster{})
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+	})
+	Context("StatefulSet", func() {
+		When("Cluster declaration is submitted", func() {
+			It("Reconciler is created", func() {
+				sset := &v1.StatefulSet{}
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, sset)
+				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+	})
 })
 
 func CreateRedisCluster() *v1alpha1.RedisCluster {
