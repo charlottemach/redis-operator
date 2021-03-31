@@ -21,13 +21,17 @@ import (
 
 	"github.com/go-logr/logr"
 	//"golang.org/x/tools/godoc/redirect"
+	v1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	redisv1alpha1 "github.com/containersolutions/redis-operator/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // RedisClusterReconciler reconciles a RedisCluster object
@@ -35,6 +39,15 @@ type RedisClusterReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+}
+
+type RedisClusterStatefulSet struct {
+	RedisCluster v1alpha1.RedisCluster
+	StatefulSet  v1.StatefulSet
+}
+
+func (r *RedisClusterStatefulSet) GetName() string {
+	return r.RedisCluster.Name + "-cluster-inst"
 }
 
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters,verbs=get;list;watch;create;update;patch;delete
@@ -67,10 +80,26 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	*/
 	redisCluster := &v1alpha1.RedisCluster{}
-
+	rcs := RedisClusterStatefulSet{RedisCluster: *redisCluster}
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
 	if err != nil {
 		r.Log.Error(err, "Getting cluster data failed")
+		return ctrl.Result{}, nil
+	}
+
+	err, sset := r.FindExistingStatefulSet(ctx, req)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// create stateful set
+			r.CreateStatefulSet(ctx, &rcs)
+
+		} else {
+			r.Log.Error(err, "Getting statefulset data failed")
+			return ctrl.Result{}, nil
+		}
+	}
+	if sset.Spec.Replicas != &(redisCluster.Spec.Replicas) {
+		// fix replicas
 	}
 
 	return ctrl.Result{}, nil
@@ -83,3 +112,36 @@ func (r *RedisClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&redisv1alpha1.RedisCluster{}).
 		Complete(r)
 }
+
+func (r *RedisClusterReconciler) FindExistingStatefulSet(ctx context.Context, req ctrl.Request) (error, *v1.StatefulSet) {
+	sset := &v1.StatefulSet{}
+	err := r.Client.Get(ctx, req.NamespacedName, sset)
+	if err != nil {
+		r.Log.Error(err, "Can't find StatefulSet")
+		return err, sset
+	}
+	return nil, sset
+}
+
+func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, rcs *RedisClusterStatefulSet) *v1.StatefulSet {
+	redisStatefulSet := &v1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      rcs.GetName(),
+			Namespace: rcs.RedisCluster.Namespace,
+		},
+		Spec: v1.StatefulSetSpec{
+			//			Replicas:
+		},
+	}
+	return redisStatefulSet
+}
+
+/*
+   	metav1.TypeMeta `json:",inline"`
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+
+	// Spec defines the desired identities of pods in this set.
+	// +optional
+	Spec StatefulSetSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
+*/

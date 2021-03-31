@@ -80,6 +80,7 @@ spec:
                     type: boolean
                 type: object
               replicas:
+                format: int32
                 type: integer
               version:
                 type: string

@@ -33,7 +33,7 @@ type RedisClusterSpec struct {
 	// Foo is an example field of RedisCluster. Edit rediscluster_types.go to remove/update
 	Auth       RedisAuth  `json:"auth,omitempty"`
 	Version    string     `json:"version,omitempty"`
-	Replicas   int        `json:"replicas,omitempty"`
+	Replicas   int32      `json:"replicas,omitempty"`
 	RedisGraph RedisGraph `json:"redis-graph,omitempty"`
 	// todo: persistence
 }
