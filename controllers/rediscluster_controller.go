@@ -20,10 +20,13 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	//"golang.org/x/tools/godoc/redirect"
 	"k8s.io/apimachinery/pkg/runtime"
+	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	
+
+	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	redisv1alpha1 "github.com/containersolutions/redis-operator/api/v1alpha1"
 )
 
@@ -50,10 +53,28 @@ type RedisClusterReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.2/pkg/reconcile
 func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
-	
+
+	/*
+			   get cluster state
+			   get desired state
+			   if (no stateful set found)
+		{	     create stateful set
+			     configure cluster
+			     add slots
+
+			   if statefulset and replicas incorrect
+			     create replicaset
+
+	*/
+	redisCluster := &v1alpha1.RedisCluster{}
+
+	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
+	if err != nil {
+		r.Log.Error(err, "Getting cluster data failed")
+	}
+
 	return ctrl.Result{}, nil
-	
-	
+
 }
 
 // SetupWithManager sets up the controller with the Manager.

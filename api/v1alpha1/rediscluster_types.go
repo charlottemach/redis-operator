@@ -62,8 +62,8 @@ type RedisGraph struct {
 type RedisCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec   RedisClusterSpec   `json:"spec,omitempty"`
-	Status RedisClusterStatus `json:"status,omitempty"`
+	Spec              RedisClusterSpec   `json:"spec,omitempty"`
+	Status            RedisClusterStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
