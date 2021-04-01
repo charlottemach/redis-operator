@@ -84,9 +84,13 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	err, sset := r.FindExistingStatefulSet(ctx, req)
 	if err != nil {
-		r.Log.Error(err, "StatefulSet not found. ")
+		r.Log.Error(err, "StatefulSet not found.")
 		if errors.IsNotFound(err) {
 			// create stateful set
+			create_map_err := r.Client.Create(ctx, r.CreateConfigMap(req))
+			if create_map_err != nil {
+				return reconcile.Result{}, create_map_err
+			}
 			create_err := r.Client.Create(ctx, r.CreateStatefulSet(ctx, req, redisCluster.Spec.Replicas))
 			if create_err != nil {
 				return reconcile.Result{}, create_err
@@ -119,6 +123,17 @@ func (r *RedisClusterReconciler) FindExistingStatefulSet(ctx context.Context, re
 		return err, sset
 	}
 	return nil, sset
+}
+
+func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request) *corev1.ConfigMap {
+	cm := corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name,
+			Namespace: req.Namespace,
+		},
+		Data: map[string]string{"redis.conf": "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly no\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n\n"},
+	}
+	return &cm
 }
 
 func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32) *v1.StatefulSet {
@@ -161,13 +176,17 @@ func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl
 									MountPath: "/data",
 								},
 							},
+							Command: []string{"redis-server", "/conf/redis.conf"},
 						},
 					},
 					Volumes: []corev1.Volume{
 						{
 							Name: "config",
 							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{Name: req.Name},
+									Items:                []corev1.KeyToPath{{Key: "redis.conf", Path: "redis.conf"}},
+								},
 							},
 						},
 						{

@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -73,11 +74,6 @@ var _ = BeforeSuite(func() {
 	err = v1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	// options := envtest.CRDInstallOptions{
-	// 	Paths: testEnv.CRDDirectoryPaths,
-	// 	CRDs:  testEnv.CRDs,
-	// }
-	// _, err = envtest.InstallCRDs(cfg, options)
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:    scheme.Scheme,
 		Namespace: "",
@@ -123,6 +119,11 @@ var _ = Describe("Reconciler", func() {
 	})
 	Context("StatefulSet", func() {
 		When("Cluster declaration is submitted", func() {
+			It("Creates configmap", func() {
+				cmap := &corev1.ConfigMap{}
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, cmap)
+				Expect(err).ToNot(HaveOccurred())
+			})
 			It("Stateful set is created", func() {
 				sset := &v1.StatefulSet{}
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, sset)
