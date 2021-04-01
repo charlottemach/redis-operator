@@ -73,21 +73,24 @@ var _ = BeforeSuite(func() {
 	err = v1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	//+kubebuilder:scaffold:scheme
+	// options := envtest.CRDInstallOptions{
+	// 	Paths: testEnv.CRDDirectoryPaths,
+	// 	CRDs:  testEnv.CRDs,
+	// }
+	// _, err = envtest.InstallCRDs(cfg, options)
+	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme:    scheme.Scheme,
+		Namespace: "",
+	})
 
-	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
+	k8sClient = k8sManager.GetClient()
 	Expect(k8sClient).NotTo(BeNil())
 
-	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme: scheme.Scheme,
-	})
-	Expect(err).ToNot(HaveOccurred())
-
 	err = (&RedisClusterReconciler{
-		Client: k8sClient,
+		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
-		Log:    ctrl.Log.WithName("controllers").WithName("RedisCluster"),
+		Log:    ctrl.Log.WithName("controllers").WithName("rediscluster"),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -97,7 +100,7 @@ var _ = BeforeSuite(func() {
 	}()
 
 	Expect(k8sClient.Create(context.Background(), cluster)).Should(Succeed())
-	time.Sleep(time.Second * 5)
+	time.Sleep(time.Second * 15)
 
 }, 60)
 
@@ -120,7 +123,7 @@ var _ = Describe("Reconciler", func() {
 	})
 	Context("StatefulSet", func() {
 		When("Cluster declaration is submitted", func() {
-			It("Reconciler is created", func() {
+			It("Stateful set is created", func() {
 				sset := &v1.StatefulSet{}
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, sset)
 				Expect(err).ToNot(HaveOccurred())
