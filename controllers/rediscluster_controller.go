@@ -80,6 +80,7 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	redisCluster := &v1alpha1.RedisCluster{}
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
 	if err != nil {
+		r.Log.Info("Deleting resources as the cluster is gone")
 		if errors.IsNotFound(err) {
 			// cleanup
 			sset := r.CreateStatefulSet(ctx, req, 0)
@@ -87,14 +88,14 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			r.Client.Delete(ctx, sset)
 			r.Client.Delete(ctx, cmap)
 
+		} else {
+			r.Log.Error(err, "Getting cluster data failed")
 		}
-		r.Log.Error(err, "Getting cluster data failed")
 		return ctrl.Result{}, nil
 	}
 
 	err, sset := r.FindExistingStatefulSet(ctx, req)
 	if err != nil {
-		r.Log.Error(err, "StatefulSet not found.")
 		if errors.IsNotFound(err) {
 			// create stateful set
 			create_map_err := r.Client.Create(ctx, r.CreateConfigMap(req))
@@ -129,8 +130,7 @@ func (r *RedisClusterReconciler) FindExistingStatefulSet(ctx context.Context, re
 	sset := &v1.StatefulSet{}
 	err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, sset)
 	if err != nil {
-		r.Log.Error(err, "Can't find StatefulSet")
-		return err, sset
+		return err, nil
 	}
 	return nil, sset
 }
