@@ -35,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -95,20 +96,25 @@ var _ = BeforeSuite(func() {
 		Expect(err).ToNot(HaveOccurred())
 	}()
 
-	Expect(k8sClient.Create(context.Background(), cluster)).Should(Succeed())
-	time.Sleep(time.Second * 15)
-
 }, 60)
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-	Expect(k8sClient.Delete(context.Background(), cluster)).Should(Succeed())
 	err := testEnv.Stop()
 	Expect(err).NotTo(HaveOccurred())
 
 })
 
 var _ = Describe("Reconciler", func() {
+	BeforeEach(func() {
+		cluster = CreateRedisCluster()
+		Expect(k8sClient.Create(context.Background(), cluster)).Should(Succeed())
+		// todo: can we remove sleep?
+		time.Sleep(200 * time.Millisecond)
+	})
+	AfterEach(func() {
+		k8sClient.Delete(context.Background(), cluster)
+	})
 	Context("CRD object", func() {
 		When("CRD is submitted", func() {
 			It("Can be found", func() {
@@ -128,6 +134,24 @@ var _ = Describe("Reconciler", func() {
 				sset := &v1.StatefulSet{}
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, sset)
 				Expect(err).ToNot(HaveOccurred())
+			})
+		})
+		When("Cluster declaration is deleted", func() {
+			It("Deletes configmap", func() {
+				Expect(k8sClient.Delete(context.Background(), cluster)).Should(Succeed())
+				time.Sleep(100 * time.Millisecond)
+				cmap := &corev1.ConfigMap{}
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: CreateRedisCluster().Name, Namespace: CreateRedisCluster().Namespace}, cmap)
+				Expect(err).To(HaveOccurred())
+				Expect(errors.IsNotFound(err)).To(BeTrue())
+			})
+			It("Deletes statefulset", func() {
+				Expect(k8sClient.Delete(context.Background(), cluster)).Should(Succeed())
+				time.Sleep(100 * time.Millisecond)
+				sset := &v1.StatefulSet{}
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: CreateRedisCluster().Name, Namespace: CreateRedisCluster().Namespace}, sset)
+				Expect(err).To(HaveOccurred())
+				Expect(errors.IsNotFound(err)).To(BeTrue())
 			})
 		})
 	})

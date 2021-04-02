@@ -61,6 +61,7 @@ type RedisClusterReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.2/pkg/reconcile
 func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
+
 	// r.Log.Error(fmt.Errorf("sorry"), "Getting cluster data failed")
 	// return ctrl.Result{}, fmt.Errorf("sorry")
 
@@ -79,6 +80,14 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	redisCluster := &v1alpha1.RedisCluster{}
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
 	if err != nil {
+		if errors.IsNotFound(err) {
+			// cleanup
+			sset := r.CreateStatefulSet(ctx, req, 0)
+			cmap := r.CreateConfigMap(req)
+			r.Client.Delete(ctx, sset)
+			r.Client.Delete(ctx, cmap)
+
+		}
 		r.Log.Error(err, "Getting cluster data failed")
 		return ctrl.Result{}, nil
 	}
