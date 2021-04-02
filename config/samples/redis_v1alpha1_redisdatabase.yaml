@@ -1,7 +1,0 @@
-apiVersion: redis.containersolutions.com/v1alpha1
-kind: RedisDatabase
-metadata:
-  name: redisdatabase-sample
-spec:
-  # Add fields here
-  foo: bar

@@ -34,6 +34,7 @@ import (
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	redisv1alpha1 "github.com/containersolutions/redis-operator/api/v1alpha1"
+	redis "github.com/containersolutions/redis-operator/internal/redis"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -137,68 +138,5 @@ func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request) *corev1.Confi
 }
 
 func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32) *v1.StatefulSet {
-	redisStatefulSet := &v1.StatefulSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name,
-			Namespace: req.Namespace,
-		},
-		Spec: v1.StatefulSetSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"rediscluster": req.Name},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"rediscluster": req.Name},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "redis-inst",
-							Image: "redis:5.0.5",
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "client",
-									ContainerPort: 6379,
-								},
-								{
-									Name:          "gossip",
-									ContainerPort: 16379,
-								},
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "config",
-									MountPath: "/conf",
-								},
-								{
-									Name:      "data",
-									MountPath: "/data",
-								},
-							},
-							Command: []string{"redis-server", "/conf/redis.conf"},
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name: "config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{Name: req.Name},
-									Items:                []corev1.KeyToPath{{Key: "redis.conf", Path: "redis.conf"}},
-								},
-							},
-						},
-						{
-							Name: "data",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	return redisStatefulSet
+	return redis.CreateStatefulSet(ctx, req, replicas)
 }
