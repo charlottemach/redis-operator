@@ -85,8 +85,11 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			// cleanup
 			sset := r.CreateStatefulSet(ctx, req, 0)
 			cmap := r.CreateConfigMap(req)
+			svc := r.CreateService(req)
+
 			r.Client.Delete(ctx, sset)
 			r.Client.Delete(ctx, cmap)
+			r.Client.Delete(ctx, svc)
 
 		} else {
 			r.Log.Error(err, "Getting cluster data failed")
@@ -106,10 +109,16 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if create_err != nil {
 				return reconcile.Result{}, create_err
 			}
+			create_svc_err := r.Client.Create(ctx, r.CreateService(req))
+			if create_svc_err != nil {
+				return reconcile.Result{}, create_svc_err
+			}
 		} else {
 			r.Log.Error(err, "Getting statefulset data failed")
-			return ctrl.Result{}, nil
+
 		}
+		return ctrl.Result{}, nil
+
 	}
 	if sset.Spec.Replicas != &(redisCluster.Spec.Replicas) {
 		// fix replicas
@@ -148,4 +157,8 @@ func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request) *corev1.Confi
 
 func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32) *v1.StatefulSet {
 	return redis.CreateStatefulSet(ctx, req, replicas)
+}
+
+func (r *RedisClusterReconciler) CreateService(req ctrl.Request) *corev1.Service {
+	return redis.CreateService(req.Namespace, req.Name)
 }
