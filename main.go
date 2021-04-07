@@ -88,9 +88,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.StatefulSetReconciler{
+	if err = (&controllers.PodReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("RedisClusterStatefulSet"),
+		Log:    ctrl.Log.WithName("controllers").WithName("RedisClusterPods"),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RedisCluster")

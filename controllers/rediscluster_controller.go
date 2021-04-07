@@ -62,7 +62,7 @@ type RedisClusterReconciler struct {
 
 func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
-	r.Log.Info("RedisCluster reconciler called %s %s", req.Namespace, req.Name)
+	r.Log.Info("RedisCluster reconciler called", "name", req.Name, "ns", req.Namespace)
 	// return ctrl.Result{}, fmt.Errorf("sorry")
 
 	/*
@@ -80,6 +80,9 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	redisCluster := &v1alpha1.RedisCluster{}
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
 	if err != nil {
+		if errors.IsNotFound(err) {
+			r.Client.Delete(ctx, r.CreateConfigMap(req))
+		}
 		r.Log.Info("The cluster has been deleted")
 		return ctrl.Result{}, nil
 	}
@@ -88,33 +91,47 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// create stateful set
-			cmap := r.CreateConfigMap(req)
-			ctrl.SetControllerReference(redisCluster, cmap, r.Scheme)
-			create_map_err := r.Client.Create(ctx, cmap)
-			if create_map_err != nil {
-				r.Log.Error(create_map_err, "Configmap already exists")
-			}
 			sset := r.CreateStatefulSet(ctx, req, redisCluster.Spec.Replicas)
 			ctrl.SetControllerReference(redisCluster, sset, r.Scheme)
 			create_err := r.Client.Create(ctx, sset)
 			if create_err != nil {
 				r.Log.Error(create_err, "StatefulSet already exists")
 			}
+
+		} else {
+			r.Log.Error(err, "Getting statefulset data failed")
+
+		}
+	}
+	err, _ = r.FindExistingConfigMap(ctx, req)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			cmap := r.CreateConfigMap(req)
+			ctrl.SetControllerReference(redisCluster, cmap, r.Scheme)
+			create_map_err := r.Client.Create(ctx, cmap)
+			if create_map_err != nil {
+				r.Log.Error(create_map_err, "Configmap already exists")
+			}
+		} else {
+			r.Log.Error(err, "Getting configmap data failed")
+
+		}
+	}
+	err, _ = r.FindExistingService(ctx, req)
+	if err != nil {
+		if errors.IsNotFound(err) {
 			svc := r.CreateService(req)
 			ctrl.SetControllerReference(redisCluster, svc, r.Scheme)
 			create_svc_err := r.Client.Create(ctx, svc)
 			if create_svc_err != nil {
 				r.Log.Error(create_svc_err, "Svc already exists")
 			}
-
 		} else {
-			r.Log.Error(err, "Getting statefulset data failed")
+			r.Log.Error(err, "Getting svc data failed")
 
 		}
-		return ctrl.Result{}, nil
-
 	}
-	if sset.Spec.Replicas != &(redisCluster.Spec.Replicas) {
+	if sset != nil && sset.Spec.Replicas != &(redisCluster.Spec.Replicas) {
 		// fix replicas
 		// return
 	}
@@ -144,6 +161,24 @@ func (r *RedisClusterReconciler) FindExistingStatefulSet(ctx context.Context, re
 		return err, nil
 	}
 	return nil, sset
+}
+
+func (r *RedisClusterReconciler) FindExistingConfigMap(ctx context.Context, req ctrl.Request) (error, *corev1.ConfigMap) {
+	cmap := &corev1.ConfigMap{}
+	err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, cmap)
+	if err != nil {
+		return err, nil
+	}
+	return nil, cmap
+}
+
+func (r *RedisClusterReconciler) FindExistingService(ctx context.Context, req ctrl.Request) (error, *corev1.Service) {
+	svc := &corev1.Service{}
+	err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, svc)
+	if err != nil {
+		return err, nil
+	}
+	return nil, svc
 }
 
 func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request) *corev1.ConfigMap {
