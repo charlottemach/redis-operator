@@ -35,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -96,6 +95,11 @@ var _ = BeforeSuite(func() {
 		Expect(err).ToNot(HaveOccurred())
 	}()
 
+	cluster = CreateRedisCluster()
+	Expect(k8sClient.Create(context.Background(), cluster)).Should(Succeed())
+	// todo: can we remove sleep?
+	time.Sleep(5000 * time.Millisecond)
+
 }, 60)
 
 var _ = AfterSuite(func() {
@@ -107,13 +111,10 @@ var _ = AfterSuite(func() {
 
 var _ = Describe("Reconciler", func() {
 	BeforeEach(func() {
-		cluster = CreateRedisCluster()
-		Expect(k8sClient.Create(context.Background(), cluster)).Should(Succeed())
-		// todo: can we remove sleep?
-		time.Sleep(200 * time.Millisecond)
+
 	})
 	AfterEach(func() {
-		k8sClient.Delete(context.Background(), cluster)
+
 	})
 	Context("CRD object", func() {
 		When("CRD is submitted", func() {
@@ -125,6 +126,13 @@ var _ = Describe("Reconciler", func() {
 	})
 	Context("StatefulSet", func() {
 		When("Cluster declaration is submitted", func() {
+			It("Sets correct owner", func() {
+				sset := &v1.StatefulSet{}
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, sset)
+				Expect(err).ToNot(HaveOccurred())
+				controller := metav1.GetControllerOf(sset)
+				Expect(controller.Kind).To(Equal("RedisCluster"))
+			})
 			It("Creates configmap", func() {
 				cmap := &corev1.ConfigMap{}
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, cmap)
@@ -135,23 +143,10 @@ var _ = Describe("Reconciler", func() {
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, sset)
 				Expect(err).ToNot(HaveOccurred())
 			})
-		})
-		When("Cluster declaration is deleted", func() {
-			It("Deletes configmap", func() {
-				Expect(k8sClient.Delete(context.Background(), cluster)).Should(Succeed())
-				time.Sleep(100 * time.Millisecond)
-				cmap := &corev1.ConfigMap{}
-				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: CreateRedisCluster().Name, Namespace: CreateRedisCluster().Namespace}, cmap)
-				Expect(err).To(HaveOccurred())
-				Expect(errors.IsNotFound(err)).To(BeTrue())
-			})
-			It("Deletes statefulset", func() {
-				Expect(k8sClient.Delete(context.Background(), cluster)).Should(Succeed())
-				time.Sleep(100 * time.Millisecond)
-				sset := &v1.StatefulSet{}
-				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: CreateRedisCluster().Name, Namespace: CreateRedisCluster().Namespace}, sset)
-				Expect(err).To(HaveOccurred())
-				Expect(errors.IsNotFound(err)).To(BeTrue())
+			It("Service set is created", func() {
+				svc := &corev1.Service{}
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, svc)
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 	})

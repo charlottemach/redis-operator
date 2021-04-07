@@ -30,11 +30,11 @@ import (
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	redisv1alpha1 "github.com/containersolutions/redis-operator/api/v1alpha1"
 	redis "github.com/containersolutions/redis-operator/internal/redis"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -59,10 +59,10 @@ type RedisClusterReconciler struct {
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.2/pkg/reconcile
+
 func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
-
-	// r.Log.Error(fmt.Errorf("sorry"), "Getting cluster data failed")
+	r.Log.Info("RedisCluster reconciler called %s %s", req.Namespace, req.Name)
 	// return ctrl.Result{}, fmt.Errorf("sorry")
 
 	/*
@@ -80,20 +80,7 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	redisCluster := &v1alpha1.RedisCluster{}
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
 	if err != nil {
-		r.Log.Info("Deleting resources as the cluster is gone")
-		if errors.IsNotFound(err) {
-			// cleanup
-			sset := r.CreateStatefulSet(ctx, req, 0)
-			cmap := r.CreateConfigMap(req)
-			svc := r.CreateService(req)
-
-			r.Client.Delete(ctx, sset)
-			r.Client.Delete(ctx, cmap)
-			r.Client.Delete(ctx, svc)
-
-		} else {
-			r.Log.Error(err, "Getting cluster data failed")
-		}
+		r.Log.Info("The cluster has been deleted")
 		return ctrl.Result{}, nil
 	}
 
@@ -101,18 +88,25 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// create stateful set
-			create_map_err := r.Client.Create(ctx, r.CreateConfigMap(req))
+			cmap := r.CreateConfigMap(req)
+			ctrl.SetControllerReference(redisCluster, cmap, r.Scheme)
+			create_map_err := r.Client.Create(ctx, cmap)
 			if create_map_err != nil {
-				return reconcile.Result{}, create_map_err
+				r.Log.Error(create_map_err, "Configmap already exists")
 			}
-			create_err := r.Client.Create(ctx, r.CreateStatefulSet(ctx, req, redisCluster.Spec.Replicas))
+			sset := r.CreateStatefulSet(ctx, req, redisCluster.Spec.Replicas)
+			ctrl.SetControllerReference(redisCluster, sset, r.Scheme)
+			create_err := r.Client.Create(ctx, sset)
 			if create_err != nil {
-				return reconcile.Result{}, create_err
+				r.Log.Error(create_err, "StatefulSet already exists")
 			}
-			create_svc_err := r.Client.Create(ctx, r.CreateService(req))
+			svc := r.CreateService(req)
+			ctrl.SetControllerReference(redisCluster, svc, r.Scheme)
+			create_svc_err := r.Client.Create(ctx, svc)
 			if create_svc_err != nil {
-				return reconcile.Result{}, create_svc_err
+				r.Log.Error(create_svc_err, "Svc already exists")
 			}
+
 		} else {
 			r.Log.Error(err, "Getting statefulset data failed")
 
@@ -122,7 +116,12 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 	if sset.Spec.Replicas != &(redisCluster.Spec.Replicas) {
 		// fix replicas
+		// return
 	}
+
+	// Instance are set up and replica count is sufficient
+
+	// check that all instances aware of each other
 
 	return ctrl.Result{}, nil
 
@@ -132,6 +131,9 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 func (r *RedisClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&redisv1alpha1.RedisCluster{}).
+		Owns(&v1.StatefulSet{}).
+		Owns(&corev1.ConfigMap{}).
+		Owns(&corev1.Service{}).
 		Complete(r)
 }
 
@@ -162,3 +164,16 @@ func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl
 func (r *RedisClusterReconciler) CreateService(req ctrl.Request) *corev1.Service {
 	return redis.CreateService(req.Namespace, req.Name)
 }
+
+// func ClusterMeet(string endpoint, string []others) {
+// 	ctx := context.Background()
+// 	rdb := redisclient.NewClient(&redisclient.Options{
+// 		Addr:     endpoint,
+// 		Password: "", // no password set
+// 		DB:       0,  // use default DB
+// 	})
+
+// 	// rdb.ClusterMeet(ctx context.Context, others, port string)
+// 	// Output: key value
+// 	// key2 does not exist
+// }
