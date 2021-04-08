@@ -54,7 +54,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 	}
 	if !ready {
-		r.Log.Info("Pod status ready", "podname", pod.Name)
+		r.Log.Info("Pod status not ready", "podname", pod.Name)
 		return ctrl.Result{}, nil
 	}
 
