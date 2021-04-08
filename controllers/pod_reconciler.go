@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"time"
 
 	//"golang.org/x/tools/godoc/redirect"
 
@@ -36,7 +35,6 @@ type PodReconciler struct {
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rediscluster - pod reconciler", req.NamespacedName)
 	r.Log.Info(fmt.Sprintf("Pod reconciler called - %s %s", req.Namespace, req.Name))
-	time.Sleep(time.Second * 10)
 	pod := &corev1.Pod{}
 	err := r.Client.Get(ctx, req.NamespacedName, pod)
 
@@ -45,6 +43,19 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			r.Log.Error(err, "Failed to get a pod", "namespacedname", req.NamespacedName)
 		}
 		return ctrl.Result{}, err
+	}
+
+	// get status
+	ready := false
+	for _, v := range pod.Status.Conditions {
+		if v.Type == corev1.PodReady && v.Status == corev1.ConditionTrue {
+			r.Log.Info("Pod status ready", "podname", pod.Name, "conditions", pod.Status.Conditions)
+			ready = true
+		}
+	}
+	if !ready {
+		r.Log.Info("Pod status ready", "podname", pod.Name)
+		return ctrl.Result{}, nil
 	}
 
 	rediscluster := pod.GetLabels()["rediscluster"]
@@ -57,8 +68,9 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		r.Log.Info("New state in CreateFunc", "state", meet)
 	}
 	meet[pod.GetLabels()["rediscluster"]].PodsNames[pod.GetName()] = pod.Status.PodIP
+
 	r.Log.Info("Current state", "state", meet)
-	r.ClusterMeet(fmt.Sprintf("%s:%s", pod.Status.PodIP, REDIS_PORT), meet[pod.GetLabels()["rediscluster"]].PodsNames)
+	r.ClusterMeet(fmt.Sprintf("%s:%s", pod.Status.PodIP, REDIS_PORT), meet[pod.GetLabels()["rediscluster"]].PodsNames) //
 
 	return ctrl.Result{}, nil
 }
@@ -73,32 +85,33 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *PodReconciler) PreFilter() predicate.Predicate {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			return false
-			//			return isOwnedByUs(e.ObjectNew)
-		},
-		CreateFunc: func(e event.CreateEvent) bool {
-			ours := isOwnedByUs(e.Object)
+			ours := isOwnedByUs(e.ObjectNew)
 			if !ours {
 				return false
 			}
-
 			return true
+		},
+		CreateFunc: func(e event.CreateEvent) bool {
+			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
 			ours := isOwnedByUs(e.Object)
-			if !ours {
-				return false
+			if ours {
+				r.DeletePodFromList(e.Object)
 			}
-			rediscluster := e.Object.GetLabels()["rediscluster"]
-
-			if redismeet, exists := meet[rediscluster]; exists {
-				delete(redismeet.PodsNames, e.Object.GetName())
-			}
-			r.Log.Info("New state in DeleteFunc", "state", meet)
-			return true
+			return false
 
 		},
 	}
+}
+
+func (r *PodReconciler) DeletePodFromList(o client.Object) {
+	rediscluster := o.GetLabels()["rediscluster"]
+
+	if redismeet, exists := meet[rediscluster]; exists {
+		delete(redismeet.PodsNames, o.GetName())
+	}
+	r.Log.Info("New state in DeleteFunc", "state", meet)
 }
 
 func isOwnedByUs(o client.Object) bool {
