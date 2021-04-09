@@ -94,8 +94,8 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			sset := r.CreateStatefulSet(ctx, req, redisCluster.Spec.Replicas)
 			ctrl.SetControllerReference(redisCluster, sset, r.Scheme)
 			create_err := r.Client.Create(ctx, sset)
-			if create_err != nil {
-				r.Log.Error(create_err, "StatefulSet already exists")
+			if create_err != nil && errors.IsAlreadyExists(create_err) {
+				r.Log.Info("StatefulSet already exists")
 			}
 
 		} else {
@@ -109,12 +109,11 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			cmap := r.CreateConfigMap(req)
 			ctrl.SetControllerReference(redisCluster, cmap, r.Scheme)
 			create_map_err := r.Client.Create(ctx, cmap)
-			if create_map_err != nil {
-				r.Log.Error(create_map_err, "Configmap already exists")
+			if create_map_err != nil && errors.IsAlreadyExists(create_map_err) {
+				r.Log.Info("Configmap already exists")
 			}
 		} else {
 			r.Log.Error(err, "Getting configmap data failed")
-
 		}
 	}
 	err, _ = r.FindExistingService(ctx, req)
@@ -123,8 +122,8 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			svc := r.CreateService(req)
 			ctrl.SetControllerReference(redisCluster, svc, r.Scheme)
 			create_svc_err := r.Client.Create(ctx, svc)
-			if create_svc_err != nil {
-				r.Log.Error(create_svc_err, "Svc already exists")
+			if create_svc_err != nil && errors.IsAlreadyExists(create_svc_err) {
+				r.Log.Info("Svc already exists")
 			}
 		} else {
 			r.Log.Error(err, "Getting svc data failed")

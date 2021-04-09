@@ -2,6 +2,10 @@ package redis
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"strconv"
+	"strings"
 
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -9,6 +13,16 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
+
+const RedisCommPort = 6379
+const RedisGossPort = 16379
+
+const totalClusterSlots = 16384
+
+type NodesSlots struct {
+	Start int
+	End   int
+}
 
 func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32) *v1.StatefulSet {
 	redisStatefulSet := &v1.StatefulSet{
@@ -33,11 +47,11 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32) *v
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "client",
-									ContainerPort: 6379,
+									ContainerPort: RedisCommPort,
 								},
 								{
 									Name:          "gossip",
-									ContainerPort: 16379,
+									ContainerPort: RedisGossPort,
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -106,17 +120,17 @@ func CreateService(Namespace, Name string) *corev1.Service {
 				{
 					Name:     "client",
 					Protocol: "TCP",
-					Port:     6379,
+					Port:     RedisCommPort,
 					TargetPort: intstr.IntOrString{Type: 0,
-						IntVal: 6379,
+						IntVal: RedisCommPort,
 					},
 				},
 				{
 					Name:     "gossip",
 					Protocol: "TCP",
-					Port:     16379,
+					Port:     RedisGossPort,
 					TargetPort: intstr.IntOrString{Type: 0,
-						IntVal: 16379,
+						IntVal: RedisGossPort,
 					},
 				},
 			},
@@ -144,3 +158,44 @@ func CreateService(Namespace, Name string) *corev1.Service {
            timeout_seconds       = 5
          }
 */
+
+func slotsPerNode(numOfNodes int, slots int) (int, int) {
+	if numOfNodes == 0 {
+		return 0, 0
+	}
+	slotsNodes := slots / numOfNodes
+	resto := slots % numOfNodes
+	return slotsNodes, resto
+}
+
+func SplitNodeSlots(nodesTotal int) []*NodesSlots {
+	nodesSlots := []*NodesSlots{}
+	numOfNodes := nodesTotal
+	slotsNode, resto := slotsPerNode(numOfNodes, totalClusterSlots)
+	slotsAsigment := []string{}
+	for i := 0; i < numOfNodes; i++ {
+		if i == 0 {
+			slotsAsigment = append(slotsAsigment, fmt.Sprintf("0,%s", strconv.Itoa(slotsNode-1)))
+		} else if i == 1 {
+			slotsAsigment = append(slotsAsigment, fmt.Sprintf("%s,%s", strconv.Itoa(slotsNode*i), strconv.Itoa(slotsNode*(i+1)-1)))
+		} else if i == numOfNodes-1 {
+			slotsAsigment = append(slotsAsigment, fmt.Sprintf("%s,%s", strconv.Itoa(slotsNode*i), strconv.Itoa(slotsNode*(i+1)-1+resto)))
+		} else {
+			slotsAsigment = append(slotsAsigment, fmt.Sprintf("%s,%s", strconv.Itoa((slotsNode*i)), strconv.Itoa(slotsNode*(i+1)-1)))
+		}
+	}
+	for i := 0; i < numOfNodes; i++ {
+		stringRangeSplit := strings.Split(slotsAsigment[i], ",")
+		start, err := strconv.Atoi(stringRangeSplit[0])
+		if err != nil {
+			log.Printf("Error assignSlotsToNodes: strconv.Atoi(stringRangeSplit[0] - %s", err)
+		}
+
+		end, err := strconv.Atoi(stringRangeSplit[1])
+		if err != nil {
+			log.Printf("Error assignSlotsToNodes: strconv.Atoi(stringRangeSplit[1] - %s", err)
+		}
+		nodesSlots = append(nodesSlots, &NodesSlots{start, end})
+	}
+	return nodesSlots
+}

@@ -3,22 +3,24 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	//"golang.org/x/tools/godoc/redirect"
 
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
+	"github.com/containersolutions/redis-operator/api/v1alpha1"
+	"github.com/containersolutions/redis-operator/internal/redis"
 	"github.com/go-logr/logr"
 	redisclient "github.com/go-redis/redis/v8"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
-
-const REDIS_PORT = "6379"
 
 type RedisMeet struct {
 	PodsNames map[string]string
@@ -34,7 +36,7 @@ type PodReconciler struct {
 
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rediscluster - pod reconciler", req.NamespacedName)
-	r.Log.Info(fmt.Sprintf("Pod reconciler called - %s %s", req.Namespace, req.Name))
+	r.Log.Info("Pod reconciler", "ns", req.NamespacedName)
 	pod := &corev1.Pod{}
 	err := r.Client.Get(ctx, req.NamespacedName, pod)
 
@@ -57,7 +59,28 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		r.Log.Info("Pod status not ready", "podname", pod.Name)
 		return ctrl.Result{}, nil
 	}
+	r.AddPodtoList(pod)
+	clusterMeet := meet[pod.GetLabels()["rediscluster"]]
+	clusterMeet.PodsNames[pod.GetName()] = pod.Status.PodIP
 
+	r.Log.Info("Current state", "state", clusterMeet)
+	r.ClusterMeet(fmt.Sprintf("%s:%d", pod.Status.PodIP, redis.RedisCommPort), clusterMeet) //
+	nsNameCluster := types.NamespacedName{
+		Name:      pod.GetLabels()["rediscluster"],
+		Namespace: req.Namespace,
+	}
+	redisCluster := &v1alpha1.RedisCluster{}
+	err = r.Client.Get(ctx, nsNameCluster, redisCluster)
+	if err != nil {
+		r.Log.Error(err, "can't find redis cluster", "nsname", nsNameCluster)
+	}
+	if len(clusterMeet.PodsNames) == int(redisCluster.Spec.Replicas) {
+		r.AssignSlots(clusterMeet)
+	}
+	return ctrl.Result{}, nil
+}
+
+func (r *PodReconciler) AddPodtoList(pod *corev1.Pod) {
 	rediscluster := pod.GetLabels()["rediscluster"]
 	if _, exists := meet[rediscluster]; !exists {
 		pods := make(map[string]string, 0)
@@ -67,12 +90,6 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 		r.Log.Info("New state in CreateFunc", "state", meet)
 	}
-	meet[pod.GetLabels()["rediscluster"]].PodsNames[pod.GetName()] = pod.Status.PodIP
-
-	r.Log.Info("Current state", "state", meet)
-	r.ClusterMeet(fmt.Sprintf("%s:%s", pod.Status.PodIP, REDIS_PORT), meet[pod.GetLabels()["rediscluster"]].PodsNames) //
-
-	return ctrl.Result{}, nil
 }
 
 func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -95,12 +112,10 @@ func (r *PodReconciler) PreFilter() predicate.Predicate {
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			ours := isOwnedByUs(e.Object)
-			if ours {
+			if isOwnedByUs(e.Object) {
 				r.DeletePodFromList(e.Object)
 			}
 			return false
-
 		},
 	}
 }
@@ -122,18 +137,36 @@ func isOwnedByUs(o client.Object) bool {
 	return false
 }
 
-func (r *PodReconciler) ClusterMeet(endpoint string, others map[string]string) {
+func (r *PodReconciler) ClusterMeet(endpoint string, meet *RedisMeet) {
 	ctx := context.Background()
 	rdb := redisclient.NewClient(&redisclient.Options{
 		Addr:     endpoint,
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
-	for _, v := range others {
+	for _, v := range meet.PodsNames {
 		r.Log.Info("Running cluster meet", "node", v, "endpoint", endpoint)
-		err := rdb.ClusterMeet(ctx, v, REDIS_PORT).Err()
+		err := rdb.ClusterMeet(ctx, v, strconv.Itoa(redis.RedisCommPort)).Err()
 		if err != nil {
-			r.Log.Error(err, "clustermeet failed", "nodes", others)
+			r.Log.Error(err, "clustermeet failed", "nodes", meet.PodsNames)
 		}
+	}
+}
+
+func (r *PodReconciler) AssignSlots(meet *RedisMeet) {
+	// when all nodes are formed in a cluster, addslots
+	slots := redis.SplitNodeSlots(len(meet.PodsNames))
+	ctx := context.Background()
+	i := 0
+	for _, endpoint := range meet.PodsNames {
+		rdb := redisclient.NewClient(&redisclient.Options{
+			Addr:     fmt.Sprintf("%s:%d", endpoint, redis.RedisCommPort),
+			Password: "", // no password set
+			DB:       0,  // use default DB
+		})
+
+		rdb.ClusterAddSlotsRange(ctx, slots[i].Start, slots[i].End)
+		r.Log.Info("Running cluster assign slots", "pods", meet)
+		i++
 	}
 }
