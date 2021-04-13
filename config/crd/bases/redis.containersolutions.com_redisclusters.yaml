@@ -73,12 +73,6 @@ spec:
                         type: object
                     type: object
                 type: object
-              redis-graph:
-                description: RedisGraph
-                properties:
-                  enabled:
-                    type: boolean
-                type: object
               replicas:
                 format: int32
                 type: integer

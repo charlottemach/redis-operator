@@ -168,9 +168,6 @@ func CreateRedisCluster() *v1alpha1.RedisCluster {
 			},
 			Version:  "5.0.5",
 			Replicas: 1,
-			RedisGraph: v1alpha1.RedisGraph{
-				Enabled: true,
-			},
 		},
 	}
 	return cluster
@@ -181,5 +178,4 @@ func CreateRedisCluster() *v1alpha1.RedisCluster {
 	Auth       RedisAuth  `json:"auth,omitempty"`
 	Version    string     `json:"version,omitempty"`
 	Replicas   int        `json:"replicas,omitempty"`
-	RedisGraph RedisGraph `json:"redis-graph,omitempty"`
 */

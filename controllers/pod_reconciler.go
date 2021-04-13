@@ -34,6 +34,12 @@ type PodReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+func (r *PodReconciler) FindRedisCluster(ctx context.Context, ns types.NamespacedName) (error, *v1alpha1.RedisCluster) {
+	redisCluster := &v1alpha1.RedisCluster{}
+	err := r.Client.Get(ctx, ns, redisCluster)
+	return err, redisCluster
+}
+
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rediscluster - pod reconciler", req.NamespacedName)
 	r.Log.Info("Pod reconciler", "ns", req.NamespacedName)
@@ -42,11 +48,21 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 
 	if err != nil {
 		if !errors.IsNotFound(err) {
-			r.Log.Error(err, "Failed to get a pod", "namespacedname", req.NamespacedName)
+			// find stateful set
+			// find rediscluster
+			// delete pod from cluster
+			r.Log.Info("Failed to get a pod", "namespacedname", req.NamespacedName)
 		}
 		return ctrl.Result{}, err
 	}
-
+	nsNameCluster := types.NamespacedName{
+		Name:      pod.GetLabels()["rediscluster"],
+		Namespace: req.Namespace,
+	}
+	err, redisCluster := r.FindRedisCluster(ctx, nsNameCluster)
+	if err != nil {
+		r.Log.Error(err, "can't find redis cluster", "nsname", nsNameCluster)
+	}
 	// get status
 	ready := false
 	for _, v := range pod.Status.Conditions {
@@ -63,20 +79,14 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	clusterMeet := meet[pod.GetLabels()["rediscluster"]]
 	clusterMeet.PodsNames[pod.GetName()] = pod.Status.PodIP
 
+	redisCluster.Status.RedisClusterPods.Pods[pod.GetName()] = pod.Status.PodIP
 	r.Log.Info("Current state", "state", clusterMeet)
 	r.ClusterMeet(fmt.Sprintf("%s:%d", pod.Status.PodIP, redis.RedisCommPort), clusterMeet) //
-	nsNameCluster := types.NamespacedName{
-		Name:      pod.GetLabels()["rediscluster"],
-		Namespace: req.Namespace,
-	}
-	redisCluster := &v1alpha1.RedisCluster{}
-	err = r.Client.Get(ctx, nsNameCluster, redisCluster)
-	if err != nil {
-		r.Log.Error(err, "can't find redis cluster", "nsname", nsNameCluster)
-	}
+
 	if len(clusterMeet.PodsNames) == int(redisCluster.Spec.Replicas) {
 		r.AssignSlots(clusterMeet)
 	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -115,7 +125,7 @@ func (r *PodReconciler) PreFilter() predicate.Predicate {
 			if isOwnedByUs(e.Object) {
 				r.DeletePodFromList(e.Object)
 			}
-			return false
+			return true
 		},
 	}
 }

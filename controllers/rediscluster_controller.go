@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
@@ -36,6 +37,7 @@ import (
 	redis "github.com/containersolutions/redis-operator/internal/redis"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 // RedisClusterReconciler reconciles a RedisCluster object
@@ -134,6 +136,22 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// fix replicas
 		// return
 	}
+	//	sset.UID
+
+	// find all pods
+	allPods := &corev1.PodList{}
+	// labelSelector := &metav1.LabelSelector{
+	// 	MatchLabels: map[string]string{"rediscluster": redisCluster.GetName()}}
+	sel := labels.NewSelector()
+	requirement, _ := labels.NewRequirement(
+		"rediscluster",
+		selection.Equals,
+		[]string{redisCluster.GetName()},
+	)
+	sel.Add(*requirement)
+	err = r.Client.List(ctx, allPods, &client.ListOptions{
+		LabelSelector: sel,
+	})
 
 	// Instance are set up and replica count is sufficient
 

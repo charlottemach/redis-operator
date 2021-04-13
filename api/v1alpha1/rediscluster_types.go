@@ -31,10 +31,9 @@ type RedisClusterSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of RedisCluster. Edit rediscluster_types.go to remove/update
-	Auth       RedisAuth  `json:"auth,omitempty"`
-	Version    string     `json:"version,omitempty"`
-	Replicas   int32      `json:"replicas,omitempty"`
-	RedisGraph RedisGraph `json:"redis-graph,omitempty"`
+	Auth     RedisAuth `json:"auth,omitempty"`
+	Version  string    `json:"version,omitempty"`
+	Replicas int32     `json:"replicas,omitempty"`
 	// todo: persistence
 }
 
@@ -42,17 +41,17 @@ type RedisClusterSpec struct {
 type RedisClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	RedisClusterPods `json:"redis-cluster-pods,omitempty"`
+}
+
+type RedisClusterPods struct {
+	Pods map[string]string
 }
 
 // RedisAuth
 type RedisAuth struct {
 	Enabled   bool                `json:"enabled,omitempty"`
 	ValueFrom apiv1.EnvFromSource `json:"valueFrom,omitempty"`
-}
-
-// RedisGraph
-type RedisGraph struct {
-	Enabled bool `json:"enabled,omitempty"`
 }
 
 //+kubebuilder:object:root=true
