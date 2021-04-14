@@ -41,11 +41,12 @@ type RedisClusterSpec struct {
 type RedisClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	RedisClusterPods `json:"redis-cluster-pods,omitempty"`
+	Nodes []RedisNode `json:"nodes"`
 }
 
-type RedisClusterPods struct {
-	Pods map[string]string
+type RedisNode struct {
+	NodeName string `json:"name"`
+	IP       string `json:"ip"`
 }
 
 // RedisAuth

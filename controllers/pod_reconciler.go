@@ -8,12 +8,15 @@ import (
 	//"golang.org/x/tools/godoc/redirect"
 
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
+	"reflect"
+
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	"github.com/containersolutions/redis-operator/internal/redis"
 	"github.com/go-logr/logr"
 	redisclient "github.com/go-redis/redis/v8"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -64,30 +67,49 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		r.Log.Error(err, "can't find redis cluster", "nsname", nsNameCluster)
 	}
 	// get status
-	ready := false
-	for _, v := range pod.Status.Conditions {
-		if v.Type == corev1.PodReady && v.Status == corev1.ConditionTrue {
-			r.Log.Info("Pod status ready", "podname", pod.Name, "conditions", pod.Status.Conditions)
-			ready = true
+
+	readyNodes := r.GetReadyNodes(ctx, redisCluster.GetName())
+	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
+		redisCluster.Status.Nodes = readyNodes
+		err = r.Status().Update(ctx, redisCluster)
+		if err != nil {
+			r.Log.Error(err, "Failed to update Memcached status")
+			return ctrl.Result{}, err
 		}
 	}
-	if !ready {
-		r.Log.Info("Pod status not ready", "podname", pod.Name)
-		return ctrl.Result{}, nil
-	}
-	r.AddPodtoList(pod)
-	clusterMeet := meet[pod.GetLabels()["rediscluster"]]
-	clusterMeet.PodsNames[pod.GetName()] = pod.Status.PodIP
+	r.Log.Info("cluster", "clustersstate", redisCluster.Status)
 
-	redisCluster.Status.RedisClusterPods.Pods[pod.GetName()] = pod.Status.PodIP
-	r.Log.Info("Current state", "state", clusterMeet)
-	r.ClusterMeet(fmt.Sprintf("%s:%d", pod.Status.PodIP, redis.RedisCommPort), clusterMeet) //
+	//r.ClusterMeet(fmt.Sprintf("%s:%d", pod.Status.PodIP, redis.RedisCommPort), clusterMeet) //
 
-	if len(clusterMeet.PodsNames) == int(redisCluster.Spec.Replicas) {
-		r.AssignSlots(clusterMeet)
-	}
+	// if len(clusterMeet.PodsNames) == int(redisCluster.Spec.Replicas) {
+	// 	r.AssignSlots(clusterMeet)
+	// }
 
 	return ctrl.Result{}, nil
+}
+
+func (r *PodReconciler) GetReadyNodes(ctx context.Context, clusterName string) []v1alpha1.RedisNode {
+	allPods := &corev1.PodList{}
+	labelSelector := labels.SelectorFromSet(
+		map[string]string{
+			"rediscluster": clusterName,
+		},
+	)
+
+	r.Client.List(ctx, allPods, &client.ListOptions{
+		LabelSelector: labelSelector,
+	})
+	readyNodes := make([]v1alpha1.RedisNode, 0)
+	for _, pod := range allPods.Items {
+		r.Log.Info("All pods list", "pod", pod.GetName(), "labels", pod.Labels)
+		for _, s := range pod.Status.Conditions {
+			if s.Type == corev1.PodReady && s.Status == corev1.ConditionTrue {
+				r.Log.Info("Pod status ready", "podname", pod.Name, "conditions", pod.Status.Conditions)
+				readyNodes = append(readyNodes, v1alpha1.RedisNode{IP: pod.Status.PodIP, NodeName: pod.GetName()})
+			}
+		}
+	}
+	return readyNodes
 }
 
 func (r *PodReconciler) AddPodtoList(pod *corev1.Pod) {
