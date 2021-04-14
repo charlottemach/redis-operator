@@ -25,12 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-type RedisMeet struct {
-	PodsNames map[string]string
-}
-
-var meet = make(map[string]*RedisMeet)
-
 type PodReconciler struct {
 	client.Client
 	Log    logr.Logger
@@ -73,17 +67,16 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		redisCluster.Status.Nodes = readyNodes
 		err = r.Status().Update(ctx, redisCluster)
 		if err != nil {
-			r.Log.Error(err, "Failed to update Memcached status")
+			r.Log.Error(err, "Failed to update rediscluster status")
 			return ctrl.Result{}, err
 		}
+		r.ClusterMeet(readyNodes)
 	}
 	r.Log.Info("cluster", "clustersstate", redisCluster.Status)
 
-	//r.ClusterMeet(fmt.Sprintf("%s:%d", pod.Status.PodIP, redis.RedisCommPort), clusterMeet) //
-
-	// if len(clusterMeet.PodsNames) == int(redisCluster.Spec.Replicas) {
-	// 	r.AssignSlots(clusterMeet)
-	// }
+	if len(readyNodes) == int(redisCluster.Spec.Replicas) {
+		r.AssignSlots(readyNodes)
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -112,18 +105,6 @@ func (r *PodReconciler) GetReadyNodes(ctx context.Context, clusterName string) [
 	return readyNodes
 }
 
-func (r *PodReconciler) AddPodtoList(pod *corev1.Pod) {
-	rediscluster := pod.GetLabels()["rediscluster"]
-	if _, exists := meet[rediscluster]; !exists {
-		pods := make(map[string]string, 0)
-		pods[pod.GetName()] = ""
-		meet[rediscluster] = &RedisMeet{
-			PodsNames: pods,
-		}
-		r.Log.Info("New state in CreateFunc", "state", meet)
-	}
-}
-
 func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Pod{}).
@@ -134,8 +115,7 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *PodReconciler) PreFilter() predicate.Predicate {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			ours := isOwnedByUs(e.ObjectNew)
-			if !ours {
+			if !isOwnedByUs(e.ObjectNew) {
 				return false
 			}
 			return true
@@ -144,21 +124,9 @@ func (r *PodReconciler) PreFilter() predicate.Predicate {
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			if isOwnedByUs(e.Object) {
-				r.DeletePodFromList(e.Object)
-			}
 			return true
 		},
 	}
-}
-
-func (r *PodReconciler) DeletePodFromList(o client.Object) {
-	rediscluster := o.GetLabels()["rediscluster"]
-
-	if redismeet, exists := meet[rediscluster]; exists {
-		delete(redismeet.PodsNames, o.GetName())
-	}
-	r.Log.Info("New state in DeleteFunc", "state", meet)
 }
 
 func isOwnedByUs(o client.Object) bool {
@@ -169,36 +137,40 @@ func isOwnedByUs(o client.Object) bool {
 	return false
 }
 
-func (r *PodReconciler) ClusterMeet(endpoint string, meet *RedisMeet) {
+func (r *PodReconciler) ClusterMeet(nodes []v1alpha1.RedisNode) {
+	if len(nodes) == 0 {
+		return
+	}
+	node := nodes[0]
 	ctx := context.Background()
 	rdb := redisclient.NewClient(&redisclient.Options{
-		Addr:     endpoint,
+		Addr:     fmt.Sprintf("%s:%d", node.IP, redis.RedisCommPort),
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
-	for _, v := range meet.PodsNames {
-		r.Log.Info("Running cluster meet", "node", v, "endpoint", endpoint)
-		err := rdb.ClusterMeet(ctx, v, strconv.Itoa(redis.RedisCommPort)).Err()
+	for _, v := range nodes[1:] {
+		r.Log.Info("Running cluster meet", "node", v, "endpoint", node.IP)
+		err := rdb.ClusterMeet(ctx, v.IP, strconv.Itoa(redis.RedisCommPort)).Err()
 		if err != nil {
-			r.Log.Error(err, "clustermeet failed", "nodes", meet.PodsNames)
+			r.Log.Error(err, "clustermeet failed", "nodes", nodes[1:])
 		}
 	}
 }
 
-func (r *PodReconciler) AssignSlots(meet *RedisMeet) {
+func (r *PodReconciler) AssignSlots(nodes []v1alpha1.RedisNode) {
 	// when all nodes are formed in a cluster, addslots
-	slots := redis.SplitNodeSlots(len(meet.PodsNames))
+	slots := redis.SplitNodeSlots(len(nodes))
 	ctx := context.Background()
 	i := 0
-	for _, endpoint := range meet.PodsNames {
+	for _, node := range nodes {
 		rdb := redisclient.NewClient(&redisclient.Options{
-			Addr:     fmt.Sprintf("%s:%d", endpoint, redis.RedisCommPort),
+			Addr:     fmt.Sprintf("%s:%d", node.IP, redis.RedisCommPort),
 			Password: "", // no password set
 			DB:       0,  // use default DB
 		})
 
 		rdb.ClusterAddSlotsRange(ctx, slots[i].Start, slots[i].End)
-		r.Log.Info("Running cluster assign slots", "pods", meet)
+		r.Log.Info("Running cluster assign slots", "pods", nodes)
 		i++
 	}
 }
