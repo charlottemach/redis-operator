@@ -36,9 +36,6 @@ import (
 	redis "github.com/containersolutions/redis-operator/internal/redis"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"sigs.k8s.io/controller-runtime/pkg/event"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // RedisClusterReconciler reconciles a RedisCluster object
@@ -147,64 +144,12 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 }
 
-func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName string) map[string]string {
-	allPods := &corev1.PodList{}
-	labelSelector := labels.SelectorFromSet(
-		map[string]string{
-			"rediscluster": clusterName,
-		},
-	)
-
-	r.Client.List(ctx, allPods, &client.ListOptions{
-		LabelSelector: labelSelector,
-	})
-	readyPods := make(map[string]string)
-	for _, pod := range allPods.Items {
-		r.Log.Info("All pods list", "pod", pod.GetName(), "labels", pod.Labels)
-		for _, s := range pod.Status.Conditions {
-			if s.Type == corev1.PodReady && s.Status == corev1.ConditionTrue {
-				r.Log.Info("Pod status ready", "podname", pod.Name, "conditions", pod.Status.Conditions)
-				readyPods[pod.GetName()] = pod.Status.PodIP
-			}
-		}
-	}
-	return readyPods
-}
-
-func (r *RedisClusterReconciler) PreFilter() predicate.Predicate {
-	return predicate.Funcs{
-		UpdateFunc: func(e event.UpdateEvent) bool {
-			ours := r.isOwnedByUs(e.ObjectNew)
-			if !ours {
-				return false
-			}
-			return true
-		},
-		CreateFunc: func(e event.CreateEvent) bool {
-			return true
-		},
-		DeleteFunc: func(e event.DeleteEvent) bool {
-			return true
-		},
-	}
-}
-
-func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
-	labels := o.GetLabels()
-	if _, found := labels["rediscluster"]; found {
-		return true
-	}
-	return false
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *RedisClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&redisv1alpha1.RedisCluster{}).
-		//		For(&corev1.Pod{}).
 		Owns(&v1.StatefulSet{}).
 		Owns(&corev1.ConfigMap{}).
-		WithEventFilter(r.PreFilter()).
 		Complete(r)
 }
 
