@@ -17,8 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	//apiv1 "k8s.io/api/core/v1"
-	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -51,8 +49,7 @@ type RedisNode struct {
 
 // RedisAuth
 type RedisAuth struct {
-	Enabled   bool                `json:"enabled,omitempty"`
-	ValueFrom apiv1.EnvFromSource `json:"valueFrom,omitempty"`
+	SecretName string `json:"secret,omitempty"`
 }
 
 //+kubebuilder:object:root=true

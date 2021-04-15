@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	//"golang.org/x/tools/godoc/redirect"
@@ -81,12 +82,27 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			r.Client.Delete(ctx, r.CreateConfigMap(req))
+			r.Client.Delete(ctx, &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: req.Name, Namespace: req.Namespace},
+			})
 		}
 		r.Log.Info("The cluster has been deleted")
 		return ctrl.Result{}, nil
 	}
 	r.Log.Info("Cluster data", "cluster", redisCluster)
+	var auth = &corev1.Secret{}
+	if len(redisCluster.Spec.Auth.SecretName) > 0 {
+		err, auth = r.GetSecret(ctx, types.NamespacedName{
+			Name:      redisCluster.Spec.Auth.SecretName,
+			Namespace: req.Namespace,
+		})
+		r.Log.Info("Secret", "auth", auth)
+		if err != nil {
+			r.Log.Error(err, "Can't find provided secret", "redisCluster", redisCluster)
+			return ctrl.Result{}, nil
+		}
+	}
+
 	err, sset := r.FindExistingStatefulSet(ctx, req)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -104,13 +120,14 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 	err, _ = r.FindExistingConfigMap(ctx, req)
+	r.Log.Info("existing configmap", "err", err)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			cmap := r.CreateConfigMap(req)
+			cmap := r.CreateConfigMap(req, auth)
 			ctrl.SetControllerReference(redisCluster, cmap, r.Scheme)
 			create_map_err := r.Client.Create(ctx, cmap)
-			if create_map_err != nil && errors.IsAlreadyExists(create_map_err) {
-				r.Log.Info("Configmap already exists")
+			if create_map_err != nil {
+				r.Log.Error(create_map_err, "Error when creating configmap")
 			}
 		} else {
 			r.Log.Error(err, "Getting configmap data failed")
@@ -142,6 +159,15 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	return ctrl.Result{}, nil
 
+}
+
+func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.NamespacedName) (error, *corev1.Secret) {
+	secret := &corev1.Secret{}
+	err := r.Client.Get(ctx, ns, secret)
+	if err != nil {
+		r.Log.Error(err, "Getting secret failed", "secret", ns)
+	}
+	return err, secret
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -180,14 +206,21 @@ func (r *RedisClusterReconciler) FindExistingService(ctx context.Context, req ct
 	return nil, svc
 }
 
-func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request) *corev1.ConfigMap {
+func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, secret *corev1.Secret) *corev1.ConfigMap {
 	cm := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
 			Namespace: req.Namespace,
 		},
-		Data: map[string]string{"redis.conf": "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly no\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n\n"},
+		Data: map[string]string{"redis.conf": "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly no\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n"},
 	}
+	r.Log.Info("Secret incoming", "secret", secret)
+	if val, exists := secret.Data["requirepass"]; exists {
+		cm.Data["redis.conf"] = cm.Data["redis.conf"] + fmt.Sprintf("requirepass \"%s\"\n", val)
+	} else if secret.Name != "" {
+		r.Log.Info("requirepass field not found in secret", "secretdata", secret.Data)
+	}
+	r.Log.Info("Generated Configmap", "configmap", cm)
 	return &cm
 }
 
@@ -198,16 +231,3 @@ func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl
 func (r *RedisClusterReconciler) CreateService(req ctrl.Request) *corev1.Service {
 	return redis.CreateService(req.Namespace, req.Name)
 }
-
-// func ClusterMeet(string endpoint, string []others) {
-// 	ctx := context.Background()
-// 	rdb := redisclient.NewClient(&redisclient.Options{
-// 		Addr:     endpoint,
-// 		Password: "", // no password set
-// 		DB:       0,  // use default DB
-// 	})
-
-// 	// rdb.ClusterMeet(ctx context.Context, others, port string)
-// 	// Output: key value
-// 	// key2 does not exist
-// }

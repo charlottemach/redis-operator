@@ -150,6 +150,36 @@ var _ = Describe("Reconciler", func() {
 			})
 		})
 	})
+	Context("Auth", func() {
+		When("Secret passed", func() {
+			It("Creates Configmap with the correct field", func() {
+				secretName := "test-secret"
+				clusterName := "secret-cluster-test"
+
+				// create secret
+				secret := &corev1.Secret{}
+				secret.SetName(secretName)
+				secret.SetNamespace("default")
+				secret.StringData = map[string]string{"requirepass": "test123"}
+				err := k8sClient.Create(context.Background(), secret)
+				time.Sleep(1 * time.Second)
+				Expect(err).ToNot(HaveOccurred())
+
+				// create test cluster
+				scluster := CreateRedisCluster()
+				scluster.SetName(clusterName)
+				scluster.Spec.Auth.SecretName = secretName
+				Expect(k8sClient.Create(context.Background(), scluster)).Should(Succeed())
+				time.Sleep(1 * time.Second)
+				// get configmap and see the value has been set
+				cmap := &corev1.ConfigMap{}
+				err = k8sClient.Get(context.Background(), types.NamespacedName{Name: clusterName, Namespace: "default"}, cmap)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(cmap.Data["redis.conf"]).To(ContainSubstring("requirepass \"test123\""))
+
+			})
+		})
+	})
 })
 
 func CreateRedisCluster() *v1alpha1.RedisCluster {
@@ -163,9 +193,7 @@ func CreateRedisCluster() *v1alpha1.RedisCluster {
 			Namespace: "default",
 		},
 		Spec: v1alpha1.RedisClusterSpec{
-			Auth: v1alpha1.RedisAuth{
-				Enabled: false,
-			},
+			Auth:     v1alpha1.RedisAuth{},
 			Version:  "5.0.5",
 			Replicas: 1,
 		},
