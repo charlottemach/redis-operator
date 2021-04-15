@@ -64,7 +64,6 @@ type RedisClusterReconciler struct {
 func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
 	r.Log.Info("RedisCluster reconciler called", "name", req.Name, "ns", req.Namespace)
-	// return ctrl.Result{}, fmt.Errorf("sorry")
 
 	/*
 			   get cluster state
@@ -96,7 +95,6 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			Name:      redisCluster.Spec.Auth.SecretName,
 			Namespace: req.Namespace,
 		})
-		r.Log.Info("Secret", "auth", auth)
 		if err != nil {
 			r.Log.Error(err, "Can't find provided secret", "redisCluster", redisCluster)
 			return ctrl.Result{}, nil
@@ -120,7 +118,6 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 	err, _ = r.FindExistingConfigMap(ctx, req)
-	r.Log.Info("existing configmap", "err", err)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			cmap := r.CreateConfigMap(req, auth)
@@ -214,7 +211,6 @@ func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, secret *corev
 		},
 		Data: map[string]string{"redis.conf": "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly no\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n"},
 	}
-	r.Log.Info("Secret incoming", "secret", secret)
 	if val, exists := secret.Data["requirepass"]; exists {
 		cm.Data["redis.conf"] = cm.Data["redis.conf"] + fmt.Sprintf("requirepass \"%s\"\n", val)
 	} else if secret.Name != "" {
