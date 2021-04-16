@@ -76,7 +76,7 @@ jobs:
         id: docker_meta
         uses: crazy-max/ghaction-docker-meta@v1
         with:
-          images: ghcr.io/containersolutions/pre-scaling-operator,containersol/pre-scaling-operator
+          images: ghcr.io/containersolutions/redis-operator
           labels:
             org.opencontainers.image.source="https://github.com/ContainerSolutions/redis-operator"
           tag-sha: true
