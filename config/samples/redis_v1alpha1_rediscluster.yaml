@@ -1,3 +1,5 @@
+
+---
 apiVersion: redis.containersolutions.com/v1alpha1
 kind: RedisCluster
 metadata:
@@ -5,4 +7,6 @@ metadata:
   namespace: default
 spec:
   replicas: 3
+  auth:
+    secret: redis-auth
   

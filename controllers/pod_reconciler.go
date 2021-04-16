@@ -61,6 +61,17 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		r.Log.Error(err, "can't find redis cluster", "nsname", nsNameCluster)
 	}
 	// get status
+	redisSecret := ""
+	if redisCluster.Spec.Auth.SecretName != "" {
+		secret := &corev1.Secret{}
+		err := r.Client.Get(ctx, types.NamespacedName{Name: redisCluster.Spec.Auth.SecretName, Namespace: req.Namespace}, secret)
+		if err != nil {
+			r.Log.Error(err, "Can't find secret for cluster", "auth", redisCluster.Spec.Auth)
+			return ctrl.Result{}, err
+		}
+		redisSecret = string(secret.Data["requirepass"])
+
+	}
 
 	readyNodes := r.GetReadyNodes(ctx, redisCluster.GetName())
 	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
@@ -70,12 +81,12 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			r.Log.Error(err, "Failed to update rediscluster status")
 			return ctrl.Result{}, err
 		}
-		r.ClusterMeet(readyNodes)
+		r.ClusterMeet(ctx, readyNodes, redisSecret)
 	}
 	r.Log.Info("cluster", "clustersstate", redisCluster.Status)
 
 	if len(readyNodes) == int(redisCluster.Spec.Replicas) {
-		r.AssignSlots(readyNodes)
+		r.AssignSlots(ctx, readyNodes, redisSecret)
 	}
 
 	return ctrl.Result{}, nil
@@ -137,17 +148,17 @@ func isOwnedByUs(o client.Object) bool {
 	return false
 }
 
-func (r *PodReconciler) ClusterMeet(nodes []v1alpha1.RedisNode) {
+func (r *PodReconciler) ClusterMeet(ctx context.Context, nodes []v1alpha1.RedisNode, secret string) {
 	if len(nodes) == 0 {
 		return
 	}
 	node := nodes[0]
-	ctx := context.Background()
 	rdb := redisclient.NewClient(&redisclient.Options{
 		Addr:     fmt.Sprintf("%s:%d", node.IP, redis.RedisCommPort),
-		Password: "", // no password set
-		DB:       0,  // use default DB
+		Password: secret,
+		DB:       0,
 	})
+
 	for _, v := range nodes[1:] {
 		r.Log.Info("Running cluster meet", "node", v, "endpoint", node.IP)
 		err := rdb.ClusterMeet(ctx, v.IP, strconv.Itoa(redis.RedisCommPort)).Err()
@@ -157,18 +168,16 @@ func (r *PodReconciler) ClusterMeet(nodes []v1alpha1.RedisNode) {
 	}
 }
 
-func (r *PodReconciler) AssignSlots(nodes []v1alpha1.RedisNode) {
+func (r *PodReconciler) AssignSlots(ctx context.Context, nodes []v1alpha1.RedisNode, secret string) {
 	// when all nodes are formed in a cluster, addslots
 	slots := redis.SplitNodeSlots(len(nodes))
-	ctx := context.Background()
 	i := 0
 	for _, node := range nodes {
 		rdb := redisclient.NewClient(&redisclient.Options{
 			Addr:     fmt.Sprintf("%s:%d", node.IP, redis.RedisCommPort),
-			Password: "", // no password set
-			DB:       0,  // use default DB
+			Password: secret,
+			DB:       0,
 		})
-
 		rdb.ClusterAddSlotsRange(ctx, slots[i].Start, slots[i].End)
 		r.Log.Info("Running cluster assign slots", "pods", nodes)
 		i++

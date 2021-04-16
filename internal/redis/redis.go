@@ -139,26 +139,6 @@ func CreateService(Namespace, Name string) *corev1.Service {
 	}
 }
 
-/*
-   liveness_probe {
-           exec {
-             command = ["sh", "-c", "redis-cli -h $(cat /etc/hostname) -c ping"]
-           }
-
-           initial_delay_seconds = 20
-           period_seconds        = 3
-         }
-
-         readiness_probe {
-           exec {
-             command = ["sh", "-c", "redis-cli -h $(cat /etc/hostname) -c ping"]
-           }
-
-           initial_delay_seconds = 15
-           timeout_seconds       = 5
-         }
-*/
-
 func slotsPerNode(numOfNodes int, slots int) (int, int) {
 	if numOfNodes == 0 {
 		return 0, 0
