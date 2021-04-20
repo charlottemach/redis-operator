@@ -7,8 +7,8 @@ The operator relies on Redis cluster functionality to server client requests.
 
 Features milestone:
 * POC
- * DONE Garbage collection
- * DONE Health checks
+ * [x] Garbage collection
+ * [x] Health checks
   * [X] Assign slots
   * [X] Set watcher with filter for redis instances
   * [X] Once instance is up and running, introduce it to other instances
@@ -23,7 +23,7 @@ Features milestone:
  * [ ] Generate events
    - When slots assign is complete
    - When cluster is healthy / unhealthy
- * TODO Annotations and labels 
+ * [ ] Annotations and labels 
 * Later
- * Dynamic scaling
- * Periodic backup
+ * [ ] Dynamic scaling
+ * [ ] Periodic backup
