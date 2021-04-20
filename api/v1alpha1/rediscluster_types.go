@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -61,7 +62,7 @@ type RedisCluster struct {
 	metav1.ObjectMeta  `json:"metadata,omitempty"`
 	Spec               RedisClusterSpec   `json:"spec,omitempty"`
 	Status             RedisClusterStatus `json:"status,omitempty"`
-	MonitoringTemplate apiv1.PodSpec      `json:"monitoringtemplate,omitempty"`
+	MonitoringTemplate v1.PodSpec         `json:"monitoringtemplate,omitempty"`
 }
 
 //+kubebuilder:object:root=true

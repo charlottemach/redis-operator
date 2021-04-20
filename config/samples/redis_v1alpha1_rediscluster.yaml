@@ -7,18 +7,13 @@ metadata:
   namespace: default
 spec:
   replicas: 3
-  auth:
-    secret: redis-auth
-  monitoringtemplate:
-    template:
-      metadata:
-        labels:
-          app: redis-monitoring
-      spec:
-        containers:
-        - name: nginx
-          image: k8s.gcr.io/nginx-slim:0.8
-          ports:
-          - containerPort: 80
-            name: monitor
+  # auth:
+  #   secret: redis-auth
+monitoringtemplate:
+  containers:
+  - name: nginx
+    image: k8s.gcr.io/nginx-slim:0.8
+    ports:
+    - containerPort: 80
+      name: monitor
   

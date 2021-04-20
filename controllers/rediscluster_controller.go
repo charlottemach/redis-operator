@@ -115,7 +115,7 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 			mdep := r.CreateMonitoringDeployment(ctx, req, redisCluster)
 			ctrl.SetControllerReference(redisCluster, mdep, r.Scheme)
-			mdep_create_err := r.Client.Create(ctx, sset)
+			mdep_create_err := r.Client.Create(ctx, mdep)
 			if mdep_create_err != nil && errors.IsAlreadyExists(create_err) {
 				r.Log.Info("Monitoring pod already exists")
 			} else if mdep_create_err != nil {
@@ -233,7 +233,7 @@ func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, secret *corev
 func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context, req ctrl.Request, rediscluster *redisv1alpha1.RedisCluster) *v1.Deployment {
 	d := &v1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name,
+			Name:      req.Name + "-monitoring",
 			Namespace: req.Namespace,
 		},
 		Spec: v1.DeploymentSpec{
@@ -247,8 +247,10 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 			Replicas: pointer.Int32Ptr(1),
 		},
 	}
+	d.Spec.Template.Labels = make(map[string]string)
 	d.Spec.Template.Labels["rediscluster"] = req.Name
 	d.Spec.Template.Labels["app"] = "monitoring"
+	r.Log.Info("Monitoring deployment", "dep", d)
 	return d
 }
 
