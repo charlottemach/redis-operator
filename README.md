@@ -1,9 +1,22 @@
-# redis-operator
+# Kubernetes and Openshift Redis Operator
+
+## Purpose
 
 Quickly provision Redis cluster environments in Kubernetes or Openshift.
 The operator relies on Redis cluster functionality to server client requests.
 
-# Features
+## How to run
+To quickly run against an existing cluster, `config` folder contains all necessary resources,
+
+## Tests
+
+There are some basic tests validating deployments.
+Tests can be run with:
+```
+make test
+```
+
+## Features
 
 Features milestone:
 * POC
