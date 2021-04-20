@@ -57,10 +57,11 @@ type RedisAuth struct {
 
 // RedisCluster is the Schema for the redisclusters API
 type RedisCluster struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              RedisClusterSpec   `json:"spec,omitempty"`
-	Status            RedisClusterStatus `json:"status,omitempty"`
+	metav1.TypeMeta    `json:",inline"`
+	metav1.ObjectMeta  `json:"metadata,omitempty"`
+	Spec               RedisClusterSpec   `json:"spec,omitempty"`
+	Status             RedisClusterStatus `json:"status,omitempty"`
+	MonitoringTemplate apiv1.PodSpec      `json:"monitoringtemplate,omitempty"`
 }
 
 //+kubebuilder:object:root=true

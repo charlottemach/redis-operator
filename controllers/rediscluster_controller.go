@@ -37,6 +37,7 @@ import (
 	redis "github.com/containersolutions/redis-operator/internal/redis"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 )
 
 // RedisClusterReconciler reconciles a RedisCluster object
@@ -110,6 +111,15 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			create_err := r.Client.Create(ctx, sset)
 			if create_err != nil && errors.IsAlreadyExists(create_err) {
 				r.Log.Info("StatefulSet already exists")
+			}
+
+			mdep := r.CreateMonitoringDeployment(ctx, req, redisCluster)
+			ctrl.SetControllerReference(redisCluster, mdep, r.Scheme)
+			mdep_create_err := r.Client.Create(ctx, sset)
+			if mdep_create_err != nil && errors.IsAlreadyExists(create_err) {
+				r.Log.Info("Monitoring pod already exists")
+			} else if mdep_create_err != nil {
+				r.Log.Error(mdep_create_err, "Error creating monitoring deployment")
 			}
 
 		} else {
@@ -218,6 +228,28 @@ func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, secret *corev
 	}
 	r.Log.Info("Generated Configmap", "configmap", cm)
 	return &cm
+}
+
+func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context, req ctrl.Request, rediscluster *redisv1alpha1.RedisCluster) *v1.Deployment {
+	d := &v1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name,
+			Namespace: req.Namespace,
+		},
+		Spec: v1.DeploymentSpec{
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{},
+				Spec:       rediscluster.MonitoringTemplate,
+			},
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"rediscluster": req.Name, "app": "monitoring"},
+			},
+			Replicas: pointer.Int32Ptr(1),
+		},
+	}
+	d.Spec.Template.Labels["rediscluster"] = req.Name
+	d.Spec.Template.Labels["app"] = "monitoring"
+	return d
 }
 
 func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32) *v1.StatefulSet {
