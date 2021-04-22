@@ -30,9 +30,10 @@ type RedisClusterSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of RedisCluster. Edit rediscluster_types.go to remove/update
-	Auth     RedisAuth `json:"auth,omitempty"`
-	Version  string    `json:"version,omitempty"`
-	Replicas int32     `json:"replicas,omitempty"`
+	Auth               RedisAuth          `json:"auth,omitempty"`
+	Version            string             `json:"version,omitempty"`
+	Replicas           int32              `json:"replicas,omitempty"`
+	MonitoringTemplate v1.PodTemplateSpec `json:"monitoringtemplate,omitempty"`
 	// todo: persistence
 }
 
@@ -58,11 +59,10 @@ type RedisAuth struct {
 
 // RedisCluster is the Schema for the redisclusters API
 type RedisCluster struct {
-	metav1.TypeMeta    `json:",inline"`
-	metav1.ObjectMeta  `json:"metadata,omitempty"`
-	Spec               RedisClusterSpec   `json:"spec,omitempty"`
-	Status             RedisClusterStatus `json:"status,omitempty"`
-	MonitoringTemplate v1.PodSpec         `json:"monitoringtemplate,omitempty"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              RedisClusterSpec   `json:"spec,omitempty"`
+	Status            RedisClusterStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true

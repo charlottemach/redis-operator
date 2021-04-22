@@ -9,11 +9,25 @@ spec:
   replicas: 3
   # auth:
   #   secret: redis-auth
-monitoringtemplate:
-  containers:
-  - name: nginx
-    image: k8s.gcr.io/nginx-slim:0.8
-    ports:
-    - containerPort: 80
-      name: monitor
+  monitoringtemplate:
+    metadata:
+      labels:
+        random: label
+    spec:
+      containers:
+        - name: monitoring
+          image: redis-redis-metrics
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+              name: monitor
+                  
+---
+kind: ConfigMap
+
+metadata:
+  name: rediscluster-sample-monitoring
+  namespace: default
+
+    
   

@@ -237,17 +237,16 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 			Namespace: req.Namespace,
 		},
 		Spec: v1.DeploymentSpec{
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{},
-				Spec:       rediscluster.MonitoringTemplate,
-			},
+			Template: rediscluster.Spec.MonitoringTemplate,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"rediscluster": req.Name, "app": "monitoring"},
 			},
 			Replicas: pointer.Int32Ptr(1),
 		},
 	}
-	d.Spec.Template.Labels = make(map[string]string)
+	if d.Spec.Template.Labels == nil {
+		d.Spec.Template.Labels = make(map[string]string)
+	}
 	d.Spec.Template.Labels["rediscluster"] = req.Name
 	d.Spec.Template.Labels["app"] = "monitoring"
 	r.Log.Info("Monitoring deployment", "dep", d)
