@@ -112,14 +112,14 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if create_err != nil && errors.IsAlreadyExists(create_err) {
 				r.Log.Info("StatefulSet already exists")
 			}
-
-			mdep := r.CreateMonitoringDeployment(ctx, req, redisCluster)
-			ctrl.SetControllerReference(redisCluster, mdep, r.Scheme)
-			mdep_create_err := r.Client.Create(ctx, mdep)
-			if mdep_create_err != nil && errors.IsAlreadyExists(create_err) {
-				r.Log.Info("Monitoring pod already exists")
-			} else if mdep_create_err != nil {
-				r.Log.Error(mdep_create_err, "Error creating monitoring deployment")
+			if redisCluster.Spec.MonitoringTemplate != nil {
+				mdep := r.CreateMonitoringDeployment(ctx, req, redisCluster)
+				mdep_create_err := r.Client.Create(ctx, mdep)
+				if mdep_create_err != nil && errors.IsAlreadyExists(create_err) {
+					r.Log.Info("Monitoring pod already exists")
+				} else if mdep_create_err != nil {
+					r.Log.Error(mdep_create_err, "Error creating monitoring deployment")
+				}
 			}
 
 		} else {
@@ -219,7 +219,7 @@ func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, secret *corev
 			Name:      req.Name,
 			Namespace: req.Namespace,
 		},
-		Data: map[string]string{"redis.conf": "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly no\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n"},
+		Data: map[string]string{"redis.conf": "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly yes\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n"},
 	}
 	if val, exists := secret.Data["requirepass"]; exists {
 		cm.Data["redis.conf"] = cm.Data["redis.conf"] + fmt.Sprintf("requirepass \"%s\"\n", val)
@@ -237,7 +237,7 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 			Namespace: req.Namespace,
 		},
 		Spec: v1.DeploymentSpec{
-			Template: rediscluster.Spec.MonitoringTemplate,
+			Template: *rediscluster.Spec.MonitoringTemplate,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"rediscluster": req.Name, "app": "monitoring"},
 			},

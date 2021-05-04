@@ -97,6 +97,7 @@ func (r *PodReconciler) GetReadyNodes(ctx context.Context, clusterName string) [
 	labelSelector := labels.SelectorFromSet(
 		map[string]string{
 			"rediscluster": clusterName,
+			"app":          "redis",
 		},
 	)
 

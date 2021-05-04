@@ -30,10 +30,10 @@ type RedisClusterSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of RedisCluster. Edit rediscluster_types.go to remove/update
-	Auth               RedisAuth          `json:"auth,omitempty"`
-	Version            string             `json:"version,omitempty"`
-	Replicas           int32              `json:"replicas,omitempty"`
-	MonitoringTemplate v1.PodTemplateSpec `json:"monitoringtemplate,omitempty"`
+	Auth               RedisAuth           `json:"auth,omitempty"`
+	Version            string              `json:"version,omitempty"`
+	Replicas           int32               `json:"replicas,omitempty"`
+	MonitoringTemplate *v1.PodTemplateSpec `json:"monitoringtemplate,omitempty"`
 	// todo: persistence
 }
 
