@@ -7,6 +7,27 @@ metadata:
   namespace: default
 spec:
   replicas: 3
-  auth:
-    secret: redis-auth
+  # auth:
+  #   secret: redis-auth
+  monitoringtemplate:
+    metadata:
+      labels:
+        random: label
+    spec:
+      containers:
+        - name: monitoring
+          image: redis-redis-metrics
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8080
+              name: monitor
+                  
+---
+kind: ConfigMap
+
+metadata:
+  name: rediscluster-sample-monitoring
+  namespace: default
+
+    
   

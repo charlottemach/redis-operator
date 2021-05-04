@@ -37,7 +37,7 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32) *v
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{"rediscluster": req.Name},
+					Labels: map[string]string{"rediscluster": req.Name, "app": "redis"},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{

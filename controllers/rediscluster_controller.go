@@ -37,6 +37,7 @@ import (
 	redis "github.com/containersolutions/redis-operator/internal/redis"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 )
 
 // RedisClusterReconciler reconciles a RedisCluster object
@@ -110,6 +111,15 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			create_err := r.Client.Create(ctx, sset)
 			if create_err != nil && errors.IsAlreadyExists(create_err) {
 				r.Log.Info("StatefulSet already exists")
+			}
+			if redisCluster.Spec.MonitoringTemplate != nil {
+				mdep := r.CreateMonitoringDeployment(ctx, req, redisCluster)
+				mdep_create_err := r.Client.Create(ctx, mdep)
+				if mdep_create_err != nil && errors.IsAlreadyExists(create_err) {
+					r.Log.Info("Monitoring pod already exists")
+				} else if mdep_create_err != nil {
+					r.Log.Error(mdep_create_err, "Error creating monitoring deployment")
+				}
 			}
 
 		} else {
@@ -209,7 +219,7 @@ func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, secret *corev
 			Name:      req.Name,
 			Namespace: req.Namespace,
 		},
-		Data: map[string]string{"redis.conf": "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly no\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n"},
+		Data: map[string]string{"redis.conf": "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly yes\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n"},
 	}
 	if val, exists := secret.Data["requirepass"]; exists {
 		cm.Data["redis.conf"] = cm.Data["redis.conf"] + fmt.Sprintf("requirepass \"%s\"\n", val)
@@ -218,6 +228,29 @@ func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, secret *corev
 	}
 	r.Log.Info("Generated Configmap", "configmap", cm)
 	return &cm
+}
+
+func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context, req ctrl.Request, rediscluster *redisv1alpha1.RedisCluster) *v1.Deployment {
+	d := &v1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      req.Name + "-monitoring",
+			Namespace: req.Namespace,
+		},
+		Spec: v1.DeploymentSpec{
+			Template: *rediscluster.Spec.MonitoringTemplate,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"rediscluster": req.Name, "app": "monitoring"},
+			},
+			Replicas: pointer.Int32Ptr(1),
+		},
+	}
+	if d.Spec.Template.Labels == nil {
+		d.Spec.Template.Labels = make(map[string]string)
+	}
+	d.Spec.Template.Labels["rediscluster"] = req.Name
+	d.Spec.Template.Labels["app"] = "monitoring"
+	r.Log.Info("Monitoring deployment", "dep", d)
+	return d
 }
 
 func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32) *v1.StatefulSet {
