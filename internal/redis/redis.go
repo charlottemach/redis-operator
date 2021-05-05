@@ -24,11 +24,12 @@ type NodesSlots struct {
 	End   int
 }
 
-func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32) *v1.StatefulSet {
+func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, labels map[string]string) *v1.StatefulSet {
 	redisStatefulSet := &v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
 			Namespace: req.Namespace,
+			Labels:    labels,
 		},
 		Spec: v1.StatefulSetSpec{
 			Replicas: &replicas,
@@ -106,7 +107,7 @@ func CreateProbe(initial int32, period int32) *corev1.Probe {
 	}
 }
 
-func CreateService(Namespace, Name string) *corev1.Service {
+func CreateService(Namespace, Name string, labels map[string]string) *corev1.Service {
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind: "Service", APIVersion: "v1",
@@ -114,6 +115,7 @@ func CreateService(Namespace, Name string) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      Name,
 			Namespace: Namespace,
+			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{

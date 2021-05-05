@@ -148,6 +148,18 @@ var _ = Describe("Reconciler", func() {
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, svc)
 				Expect(err).ToNot(HaveOccurred())
 			})
+			It("Stateful set is created", func() {
+				svc := &corev1.Service{}
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, svc)
+				Expect(err).ToNot(HaveOccurred())
+			})
+			It("Pod template labels are passed", func() {
+				// rcluster := &v1alpha1.RedisCluster{}
+				// err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, cluster)
+				// logf.Log.Info("ncluster", "cluster", rcluster)
+				// Expect(err).ToNot(HaveOccurred())
+				// Expect(len(rcluster.Spec.Monitoring.GetObjectMeta().GetLabels())).To(Equal(2))
+			})
 		})
 	})
 	Context("Auth", func() {
@@ -196,8 +208,26 @@ func CreateRedisCluster() *v1alpha1.RedisCluster {
 			Auth:     v1alpha1.RedisAuth{},
 			Version:  "5.0.5",
 			Replicas: 1,
+			Monitoring: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:   "monitor",
+					Labels: map[string]string{"l1": "l1", "l2": "l2"},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Image:   "test:1.4.36-alpine",
+						Name:    "test",
+						Command: []string{"test"},
+						Ports: []corev1.ContainerPort{{
+							ContainerPort: 9111,
+							Name:          "test",
+						}},
+					}},
+				},
+			},
 		},
 	}
+
 	return cluster
 }
 
