@@ -136,7 +136,7 @@ func CreateService(Namespace, Name string, labels map[string]string) *corev1.Ser
 					},
 				},
 			},
-			Selector: map[string]string{"rediscluster": Name},
+			Selector: map[string]string{"rediscluster": Name, "app": "redis"},
 		},
 	}
 }
