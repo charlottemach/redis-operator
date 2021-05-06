@@ -24,6 +24,9 @@ import (
 	//"golang.org/x/tools/godoc/redirect"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+
+	// "k8s.io/apiextensions-apiserver/pkg/client/clientset"
+
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,7 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
-	redisv1alpha1 "github.com/containersolutions/redis-operator/api/v1alpha1"
 	redis "github.com/containersolutions/redis-operator/internal/redis"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -80,6 +82,7 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	*/
 	redisCluster := &v1alpha1.RedisCluster{}
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
+
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.Client.Delete(ctx, &corev1.ConfigMap{
@@ -106,21 +109,22 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// create stateful set
-			sset := r.CreateStatefulSet(ctx, req, redisCluster.Spec.Replicas)
+			sset := r.CreateStatefulSet(ctx, req, redisCluster.Spec.Replicas, redisCluster.ObjectMeta.GetLabels())
 			ctrl.SetControllerReference(redisCluster, sset, r.Scheme)
 			create_err := r.Client.Create(ctx, sset)
 			if create_err != nil && errors.IsAlreadyExists(create_err) {
 				r.Log.Info("StatefulSet already exists")
 			}
-			if redisCluster.Spec.MonitoringTemplate != nil {
-				mdep := r.CreateMonitoringDeployment(ctx, req, redisCluster)
-				mdep_create_err := r.Client.Create(ctx, mdep)
-				if mdep_create_err != nil && errors.IsAlreadyExists(create_err) {
-					r.Log.Info("Monitoring pod already exists")
-				} else if mdep_create_err != nil {
-					r.Log.Error(mdep_create_err, "Error creating monitoring deployment")
-				}
+			// if redisCluster.Spec.MonitoringTemplate  {
+			mdep := r.CreateMonitoringDeployment(ctx, req, redisCluster, redisCluster.ObjectMeta.GetLabels())
+			ctrl.SetControllerReference(redisCluster, mdep, r.Scheme)
+			mdep_create_err := r.Client.Create(ctx, mdep)
+			if mdep_create_err != nil && errors.IsAlreadyExists(create_err) {
+				r.Log.Info("Monitoring pod already exists")
+			} else if mdep_create_err != nil {
+				r.Log.Error(mdep_create_err, "Error creating monitoring deployment")
 			}
+			// }
 
 		} else {
 			r.Log.Error(err, "Getting statefulset data failed")
@@ -130,7 +134,7 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	err, _ = r.FindExistingConfigMap(ctx, req)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			cmap := r.CreateConfigMap(req, auth)
+			cmap := r.CreateConfigMap(req, auth, redisCluster.GetObjectMeta().GetLabels())
 			ctrl.SetControllerReference(redisCluster, cmap, r.Scheme)
 			create_map_err := r.Client.Create(ctx, cmap)
 			if create_map_err != nil {
@@ -143,7 +147,7 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	err, _ = r.FindExistingService(ctx, req)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			svc := r.CreateService(req)
+			svc := r.CreateService(req, redisCluster.GetObjectMeta().GetLabels())
 			ctrl.SetControllerReference(redisCluster, svc, r.Scheme)
 			create_svc_err := r.Client.Create(ctx, svc)
 			if create_svc_err != nil && errors.IsAlreadyExists(create_svc_err) {
@@ -180,7 +184,7 @@ func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.Namespa
 // SetupWithManager sets up the controller with the Manager.
 func (r *RedisClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&redisv1alpha1.RedisCluster{}).
+		For(&v1alpha1.RedisCluster{}).
 		Owns(&v1.StatefulSet{}).
 		Owns(&corev1.ConfigMap{}).
 		Complete(r)
@@ -213,11 +217,12 @@ func (r *RedisClusterReconciler) FindExistingService(ctx context.Context, req ct
 	return nil, svc
 }
 
-func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, secret *corev1.Secret) *corev1.ConfigMap {
+func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, secret *corev1.Secret, labels map[string]string) *corev1.ConfigMap {
 	cm := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
 			Namespace: req.Namespace,
+			Labels:    labels,
 		},
 		Data: map[string]string{"redis.conf": "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly yes\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n"},
 	}
@@ -230,33 +235,41 @@ func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, secret *corev
 	return &cm
 }
 
-func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context, req ctrl.Request, rediscluster *redisv1alpha1.RedisCluster) *v1.Deployment {
+func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context, req ctrl.Request, rediscluster *v1alpha1.RedisCluster, labels map[string]string) *v1.Deployment {
 	d := &v1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name + "-monitoring",
 			Namespace: req.Namespace,
+			Labels:    labels,
 		},
 		Spec: v1.DeploymentSpec{
-			Template: *rediscluster.Spec.MonitoringTemplate,
+			Template: rediscluster.Spec.Monitoring,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"rediscluster": req.Name, "app": "monitoring"},
 			},
 			Replicas: pointer.Int32Ptr(1),
 		},
 	}
-	if d.Spec.Template.Labels == nil {
+	if labels == nil {
 		d.Spec.Template.Labels = make(map[string]string)
+	} else {
+		d.Spec.Template.Labels = labels
 	}
 	d.Spec.Template.Labels["rediscluster"] = req.Name
 	d.Spec.Template.Labels["app"] = "monitoring"
+	r.Log.Info("Incoming monitoring ", "spec", rediscluster.Spec)
+	for k, v := range rediscluster.Spec.Monitoring.Labels {
+		d.Spec.Template.Labels[k] = v
+	}
 	r.Log.Info("Monitoring deployment", "dep", d)
+	r.Log.Info("Monitoring spec", "spec", (rediscluster.Spec.Monitoring).ObjectMeta)
 	return d
 }
 
-func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32) *v1.StatefulSet {
-	return redis.CreateStatefulSet(ctx, req, replicas)
+func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, labels map[string]string) *v1.StatefulSet {
+	return redis.CreateStatefulSet(ctx, req, replicas, labels)
 }
 
-func (r *RedisClusterReconciler) CreateService(req ctrl.Request) *corev1.Service {
-	return redis.CreateService(req.Namespace, req.Name)
+func (r *RedisClusterReconciler) CreateService(req ctrl.Request, labels map[string]string) *corev1.Service {
+	return redis.CreateService(req.Namespace, req.Name, labels)
 }
