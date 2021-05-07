@@ -1,0 +1,3 @@
+resources:
+- bases/redis.containersolutions.com_redisclusters.yaml
+

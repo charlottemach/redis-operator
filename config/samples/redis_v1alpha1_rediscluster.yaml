@@ -1,33 +1,32 @@
-
----
 apiVersion: redis.containersolutions.com/v1alpha1
 kind: RedisCluster
 metadata:
   name: rediscluster-sample
   namespace: default
+  labels:
+    app: redis-graph
+    team: team-a
 spec:
   replicas: 3
+  storage: 3Gi
+  image: redislabs/redisgraph:2.4.1
   # auth:
   #   secret: redis-auth
-  monitoringtemplate:
-    metadata:
-      labels:
-        random: label
-    spec:
-      containers:
-        - name: monitoring
-          image: redis-redis-metrics
-          imagePullPolicy: Never
-          ports:
-            - containerPort: 8080
-              name: monitor
+  # monitoring:
+  #   spec:
+  #     volumes:
+  #       - name: rediscluster-samplemonitoring-config
+  #     containers:
+  #       - name: monitoring
+  #         image: redis-redis-metrics
+  #         # env:
+  #         #   - name: REDISAUTH
+  #         #     valueFrom:
+  #         #       secretKeyRef:
+  #         #         name: redis-auth
+  #         #         key: requirepass
+  #         ports:
+  #           - containerPort: 8080
+  #             name: monitor
                   
 ---
-kind: ConfigMap
-
-metadata:
-  name: rediscluster-sample-monitoring
-  namespace: default
-
-    
-  
