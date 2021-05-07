@@ -109,7 +109,7 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// create stateful set
-			sset := r.CreateStatefulSet(ctx, req, redisCluster.Spec.Replicas, redisCluster.ObjectMeta.GetLabels())
+			sset := r.CreateStatefulSet(ctx, req, redisCluster.Spec.Replicas, redisCluster.Spec.Image, redisCluster.Spec.Storage, redisCluster.ObjectMeta.GetLabels())
 			ctrl.SetControllerReference(redisCluster, sset, r.Scheme)
 			create_err := r.Client.Create(ctx, sset)
 			if create_err != nil && errors.IsAlreadyExists(create_err) {
@@ -162,7 +162,6 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// fix replicas
 		// return
 	}
-	//	sset.UID
 
 	// Instance are set up and replica count is sufficient
 
@@ -257,17 +256,15 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 	}
 	d.Spec.Template.Labels["rediscluster"] = req.Name
 	d.Spec.Template.Labels["app"] = "monitoring"
-	r.Log.Info("Incoming monitoring ", "spec", rediscluster.Spec)
 	for k, v := range rediscluster.Spec.Monitoring.Labels {
 		d.Spec.Template.Labels[k] = v
 	}
-	r.Log.Info("Monitoring deployment", "dep", d)
-	r.Log.Info("Monitoring spec", "spec", (rediscluster.Spec.Monitoring).ObjectMeta)
+
 	return d
 }
 
-func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, labels map[string]string) *v1.StatefulSet {
-	return redis.CreateStatefulSet(ctx, req, replicas, labels)
+func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, redisImage string, storage string, labels map[string]string) *v1.StatefulSet {
+	return redis.CreateStatefulSet(ctx, req, replicas, redisImage, storage, labels)
 }
 
 func (r *RedisClusterReconciler) CreateService(req ctrl.Request, labels map[string]string) *corev1.Service {

@@ -37,12 +37,13 @@ spec:
             description: RedisClusterSpec defines the desired state of RedisCluster
             properties:
               auth:
-                description: Foo is an example field of RedisCluster. Edit rediscluster_types.go
-                  to remove/update
+                description: RedisAuth
                 properties:
                   secret:
                     type: string
                 type: object
+              image:
+                type: string
               monitoring:
                 description: PodTemplateSpec describes the data a pod should have
                   when created from a template
@@ -6301,6 +6302,8 @@ spec:
               replicas:
                 format: int32
                 type: integer
+              storage:
+                type: string
               version:
                 type: string
             type: object

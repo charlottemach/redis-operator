@@ -9,6 +9,7 @@ import (
 
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -24,7 +25,13 @@ type NodesSlots struct {
 	End   int
 }
 
-func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, labels map[string]string) *v1.StatefulSet {
+func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, redisImage string, storage string, labels map[string]string) *v1.StatefulSet {
+	if redisImage == "" {
+		redisImage = "redislabs/redisgraph:2.4.1"
+	}
+	if storage == "" {
+		storage = "12Gi"
+	}
 	redisStatefulSet := &v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
@@ -36,6 +43,19 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, la
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"rediscluster": req.Name},
 			},
+			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "data",
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceStorage: resource.MustParse(storage),
+						},
+					},
+				}},
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{"rediscluster": req.Name, "app": "redis"},
@@ -44,7 +64,7 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, la
 					Containers: []corev1.Container{
 						{
 							Name:  "redis-graph",
-							Image: "redislabs/redisgraph:2.4.1",
+							Image: redisImage,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "client",
@@ -84,7 +104,9 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, la
 						{
 							Name: "data",
 							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: "data",
+								},
 							},
 						},
 					},
@@ -136,7 +158,7 @@ func CreateService(Namespace, Name string, labels map[string]string) *corev1.Ser
 					},
 				},
 			},
-			Selector: map[string]string{"rediscluster": Name},
+			Selector: map[string]string{"rediscluster": Name, "app": "redis"},
 		},
 	}
 }

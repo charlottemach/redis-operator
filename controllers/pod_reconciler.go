@@ -154,12 +154,7 @@ func (r *PodReconciler) ClusterMeet(ctx context.Context, nodes []v1alpha1.RedisN
 		return
 	}
 	node := nodes[0]
-	rdb := redisclient.NewClient(&redisclient.Options{
-		Addr:     fmt.Sprintf("%s:%d", node.IP, redis.RedisCommPort),
-		Password: secret,
-		DB:       0,
-	})
-
+	rdb := r.GetRedisClient(ctx, node.IP, secret)
 	for _, v := range nodes[1:] {
 		r.Log.Info("Running cluster meet", "node", v, "endpoint", node.IP)
 		err := rdb.ClusterMeet(ctx, v.IP, strconv.Itoa(redis.RedisCommPort)).Err()
@@ -174,13 +169,18 @@ func (r *PodReconciler) AssignSlots(ctx context.Context, nodes []v1alpha1.RedisN
 	slots := redis.SplitNodeSlots(len(nodes))
 	i := 0
 	for _, node := range nodes {
-		rdb := redisclient.NewClient(&redisclient.Options{
-			Addr:     fmt.Sprintf("%s:%d", node.IP, redis.RedisCommPort),
-			Password: secret,
-			DB:       0,
-		})
+		rdb := r.GetRedisClient(ctx, node.IP, secret)
 		rdb.ClusterAddSlotsRange(ctx, slots[i].Start, slots[i].End)
 		r.Log.Info("Running cluster assign slots", "pods", nodes)
 		i++
 	}
+}
+
+func (r *PodReconciler) GetRedisClient(ctx context.Context, ip string, secret string) *redisclient.Client {
+	rdb := redisclient.NewClient(&redisclient.Options{
+		Addr:     fmt.Sprintf("%s:%d", ip, redis.RedisCommPort),
+		Password: secret,
+		DB:       0,
+	})
+	return rdb
 }
