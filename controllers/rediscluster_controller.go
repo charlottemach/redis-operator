@@ -256,12 +256,10 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 	}
 	d.Spec.Template.Labels["rediscluster"] = req.Name
 	d.Spec.Template.Labels["app"] = "monitoring"
-	r.Log.Info("Incoming monitoring ", "spec", rediscluster.Spec)
 	for k, v := range rediscluster.Spec.Monitoring.Labels {
 		d.Spec.Template.Labels[k] = v
 	}
-	r.Log.Info("Monitoring deployment", "dep", d)
-	r.Log.Info("Monitoring spec", "spec", (rediscluster.Spec.Monitoring).ObjectMeta)
+
 	return d
 }
 

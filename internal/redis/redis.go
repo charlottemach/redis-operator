@@ -44,6 +44,9 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, re
 				MatchLabels: map[string]string{"rediscluster": req.Name},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "data",
+				},
 				Spec: corev1.PersistentVolumeClaimSpec{
 					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 					Resources: corev1.ResourceRequirements{
@@ -101,7 +104,9 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, re
 						{
 							Name: "data",
 							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: "data",
+								},
 							},
 						},
 					},
