@@ -29,6 +29,7 @@ type RedisClusterSpec struct {
 	Image      string             `json:"image,omitempty"`
 	Storage    string             `json:"storage,omitempty"`
 	Monitoring v1.PodTemplateSpec `json:"monitoring,omitempty"`
+	Config     string             `json:"config,omitempty"`
 }
 
 // RedisClusterStatus defines the observed state of RedisCluster

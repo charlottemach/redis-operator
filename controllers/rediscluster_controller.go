@@ -92,7 +92,6 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		r.Log.Info("The cluster has been deleted")
 		return ctrl.Result{}, nil
 	}
-	r.Log.Info("Cluster data", "cluster", redisCluster)
 	var auth = &corev1.Secret{}
 	if len(redisCluster.Spec.Auth.SecretName) > 0 {
 		err, auth = r.GetSecret(ctx, types.NamespacedName{
@@ -104,12 +103,26 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, nil
 		}
 	}
+	err, _ = r.FindExistingConfigMap(ctx, req)
 
+	if err != nil {
+		if errors.IsNotFound(err) {
+			cmap := r.CreateConfigMap(req, redisCluster.Spec, auth, redisCluster.GetObjectMeta().GetLabels())
+			ctrl.SetControllerReference(redisCluster, cmap, r.Scheme)
+			r.Log.Info("Creating configmap", "configmap", cmap)
+			create_map_err := r.Client.Create(ctx, cmap)
+			if create_map_err != nil {
+				r.Log.Error(create_map_err, "Error when creating configmap")
+			}
+		} else {
+			r.Log.Error(err, "Getting configmap data failed")
+		}
+	}
 	err, sset := r.FindExistingStatefulSet(ctx, req)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// create stateful set
-			sset := r.CreateStatefulSet(ctx, req, redisCluster.Spec.Replicas, redisCluster.Spec.Image, redisCluster.Spec.Storage, redisCluster.ObjectMeta.GetLabels())
+			sset := r.CreateStatefulSet(ctx, req, redisCluster.Spec, redisCluster.ObjectMeta.GetLabels())
 			ctrl.SetControllerReference(redisCluster, sset, r.Scheme)
 			create_err := r.Client.Create(ctx, sset)
 			if create_err != nil && errors.IsAlreadyExists(create_err) {
@@ -129,19 +142,6 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		} else {
 			r.Log.Error(err, "Getting statefulset data failed")
 
-		}
-	}
-	err, _ = r.FindExistingConfigMap(ctx, req)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			cmap := r.CreateConfigMap(req, auth, redisCluster.GetObjectMeta().GetLabels())
-			ctrl.SetControllerReference(redisCluster, cmap, r.Scheme)
-			create_map_err := r.Client.Create(ctx, cmap)
-			if create_map_err != nil {
-				r.Log.Error(create_map_err, "Error when creating configmap")
-			}
-		} else {
-			r.Log.Error(err, "Getting configmap data failed")
 		}
 	}
 	err, _ = r.FindExistingService(ctx, req)
@@ -216,21 +216,35 @@ func (r *RedisClusterReconciler) FindExistingService(ctx context.Context, req ct
 	return nil, svc
 }
 
-func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, secret *corev1.Secret, labels map[string]string) *corev1.ConfigMap {
+func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, spec v1alpha1.RedisClusterSpec, secret *corev1.Secret, labels map[string]string) *corev1.ConfigMap {
+	config := spec.Config
+	r.Log.Info("spec config", "sc", spec.Config)
+	if config == "" {
+		config = "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly yes\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n"
+	}
+	r.Log.Info("d config", "config", config)
 	cm := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
 			Namespace: req.Namespace,
 			Labels:    labels,
 		},
-		Data: map[string]string{"redis.conf": "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly yes\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n"},
+		Data: map[string]string{"redis.conf": config},
 	}
 	if val, exists := secret.Data["requirepass"]; exists {
-		cm.Data["redis.conf"] = cm.Data["redis.conf"] + fmt.Sprintf("requirepass \"%s\"\n", val)
+		cm.Data["redis.conf"] = cm.Data["redis.conf"] + fmt.Sprintf("\nrequirepass \"%s\"\n", val)
 	} else if secret.Name != "" {
 		r.Log.Info("requirepass field not found in secret", "secretdata", secret.Data)
 	}
+	// add cluster config file entries
+	cm.Data["redis.conf"] = cm.Data["redis.conf"] + "cluster-config-file /data/nodes.conf\n"
+	cm.Data["redis.conf"] = cm.Data["redis.conf"] + "dir /data/\n"
+	cm.Data["redis.conf"] = cm.Data["redis.conf"] + "cluster-enabled yes\n"
+	cm.Data["redis.conf"] = cm.Data["redis.conf"] + "cluster-require-full-coverage no\n"
+	cm.Data["redis.conf"] = cm.Data["redis.conf"] + "cluster-migration-barrier 1\n"
+
 	r.Log.Info("Generated Configmap", "configmap", cm)
+	r.Log.Info("Spec config", "speconfig", spec.Config)
 	return &cm
 }
 
@@ -263,8 +277,8 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 	return d
 }
 
-func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, redisImage string, storage string, labels map[string]string) *v1.StatefulSet {
-	return redis.CreateStatefulSet(ctx, req, replicas, redisImage, storage, labels)
+func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.RedisClusterSpec, labels map[string]string) *v1.StatefulSet {
+	return redis.CreateStatefulSet(ctx, req, spec, labels)
 }
 
 func (r *RedisClusterReconciler) CreateService(req ctrl.Request, labels map[string]string) *corev1.Service {

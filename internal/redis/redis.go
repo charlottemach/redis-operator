@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -25,7 +26,12 @@ type NodesSlots struct {
 	End   int
 }
 
-func CreateStatefulSet(ctx context.Context, req ctrl.Request, replicas int32, redisImage string, storage string, labels map[string]string) *v1.StatefulSet {
+func CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.RedisClusterSpec, labels map[string]string) *v1.StatefulSet {
+	//	req ctrl.Request, replicas int32, redisImage string, storage string
+	redisImage := spec.Image
+	storage := spec.Storage
+	replicas := spec.Replicas
+
 	if redisImage == "" {
 		redisImage = "redislabs/redisgraph:2.4.1"
 	}
