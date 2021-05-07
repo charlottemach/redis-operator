@@ -11,9 +11,17 @@ The operator relies on Redis cluster functionality to serve client requests.
 To quickly run against an existing cluster, `config` folder contains all necessary resources
 
 `config/ops/rbac` - RBAC manifests
+
 `config/ops/crd` - CRD manifests
+
 `config/apps/` - Operator deployment
+
 `config/samples/` - Example RedisCluster deployment
+
+`kustomize build config/ | kubectl apply -f -` - deploys the operator
+
+`kustomize build config/samples/ | kubectl apply -f -` deploys a RedisCluster resource
+
 
 ## Tests
 
