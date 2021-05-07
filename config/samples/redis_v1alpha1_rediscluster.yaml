@@ -10,6 +10,13 @@ spec:
   replicas: 3
   storage: 3Gi
   image: redislabs/redisgraph:2.4.1
+  config: |
+    maxmemory 2600mb
+    maxmemory-samples 5
+    maxmemory-policy allkeys-lru
+    appendonly yes
+    protected-mode no
+
   # auth:
   #   secret: redis-auth
   # monitoring:

@@ -42,6 +42,8 @@ spec:
                   secret:
                     type: string
                 type: object
+              config:
+                type: string
               image:
                 type: string
               monitoring:

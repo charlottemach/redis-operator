@@ -1,0 +1,4 @@
+bases:
+- apps
+- ops/crd
+- ops/rbac
