@@ -33,7 +33,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - redis.containersolutions.com
+  - apps/v1
   resources:
   - statefulsets
   verbs:
