@@ -91,7 +91,7 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.Redi
 									MountPath: "/data",
 								},
 							},
-							Command:        []string{"redis-server", "/conf/redis.conf", "--loadmodule", "/usr/lib/redis/modules/redisgraph.so"},
+							Command:        []string{"redis-server", "/conf/redis.conf"},
 							LivenessProbe:  CreateProbe(20, 5),
 							ReadinessProbe: CreateProbe(15, 5),
 						},

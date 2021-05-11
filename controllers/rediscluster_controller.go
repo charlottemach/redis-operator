@@ -68,18 +68,6 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
 	r.Log.Info("RedisCluster reconciler called", "name", req.Name, "ns", req.Namespace)
 
-	/*
-			   get cluster state
-			   get desired state
-			   if (no stateful set found)
-		{	     create stateful set
-			     configure cluster
-			     add slots
-
-			   if statefulset and replicas incorrect
-			     create replicaset
-
-	*/
 	redisCluster := &v1alpha1.RedisCluster{}
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
 
