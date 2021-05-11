@@ -8,4 +8,4 @@ spec:
     spec:
       containers:
       - name: manager
-        image: ghcr.io/containersolutions/redis-operator:0.1.0-rc0
+        image: ghcr.io/containersolutions/redis-operator:0.1.0-rc3
