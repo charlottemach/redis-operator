@@ -16,7 +16,7 @@ spec:
     maxmemory-policy allkeys-lru
     appendonly yes
     protected-mode no
-
+    loadmodule /usr/lib/redis/modules/redisgraph.so
   # auth:
   #   secret: redis-auth
   # monitoring:
