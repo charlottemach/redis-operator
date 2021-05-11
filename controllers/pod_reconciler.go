@@ -84,11 +84,13 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			return ctrl.Result{}, err
 		}
 		r.ClusterMeet(ctx, readyNodes, redisSecret)
+		r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
 	}
 	r.Log.Info("cluster", "clustersstate", redisCluster.Status)
 
 	if len(readyNodes) == int(redisCluster.Spec.Replicas) {
 		r.AssignSlots(ctx, readyNodes, redisSecret)
+		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
 	}
 
 	return ctrl.Result{}, nil
