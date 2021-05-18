@@ -24,6 +24,7 @@ import (
 	//"golang.org/x/tools/godoc/redirect"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/tools/record"
 
 	// "k8s.io/apiextensions-apiserver/pkg/client/clientset"
 
@@ -34,6 +35,7 @@ import (
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	redis "github.com/containersolutions/redis-operator/internal/redis"
@@ -45,9 +47,12 @@ import (
 // RedisClusterReconciler reconciles a RedisCluster object
 type RedisClusterReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log      logr.Logger
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
+
+var rdbFinalizer = "rediscluster.containersolutions.com/rdbFinalizer"
 
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters/status,verbs=get;update;patch
@@ -92,6 +97,33 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{}, nil
 		}
 	}
+
+	if redisCluster.GetDeletionTimestamp().IsZero() {
+		// The object is not being deleted, so if it does not have our finalizer,
+		// then lets add the finalizer and update the object. This is equivalent
+		// registering our finalizer.
+		if !containsString(redisCluster.GetFinalizers(), rdbFinalizer) {
+			controllerutil.AddFinalizer(redisCluster, rdbFinalizer)
+			if err := r.Update(ctx, redisCluster); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		// deletion is set
+		// check if the finalizer is there
+		// run finalizer logic
+		// generate event
+		// remove finalizer string
+		if containsString(redisCluster.GetFinalizers(), rdbFinalizer) {
+			r.RdbFinalizer(ctx, redisCluster)
+			controllerutil.RemoveFinalizer(redisCluster, rdbFinalizer)
+			if err := r.Update(ctx, redisCluster); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+
+	}
+
 	err, _ = r.FindExistingConfigMap(ctx, req)
 
 	if err != nil {
@@ -117,16 +149,16 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			if create_err != nil && errors.IsAlreadyExists(create_err) {
 				r.Log.Info("StatefulSet already exists")
 			}
-			// if redisCluster.Spec.MonitoringTemplate  {
-			mdep := r.CreateMonitoringDeployment(ctx, req, redisCluster, redisCluster.ObjectMeta.GetLabels())
-			ctrl.SetControllerReference(redisCluster, mdep, r.Scheme)
-			mdep_create_err := r.Client.Create(ctx, mdep)
-			if mdep_create_err != nil && errors.IsAlreadyExists(create_err) {
-				r.Log.Info("Monitoring pod already exists")
-			} else if mdep_create_err != nil {
-				r.Log.Error(mdep_create_err, "Error creating monitoring deployment")
+			if redisCluster.Spec.Monitoring != nil {
+				mdep := r.CreateMonitoringDeployment(ctx, req, redisCluster, redisCluster.ObjectMeta.GetLabels())
+				ctrl.SetControllerReference(redisCluster, mdep, r.Scheme)
+				mdep_create_err := r.Client.Create(ctx, mdep)
+				if mdep_create_err != nil && errors.IsAlreadyExists(create_err) {
+					r.Log.Info("Monitoring pod already exists")
+				} else if mdep_create_err != nil {
+					r.Log.Error(mdep_create_err, "Error creating monitoring deployment")
+				}
 			}
-			// }
 
 		} else {
 			r.Log.Error(err, "Getting statefulset data failed")
@@ -158,6 +190,11 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	return ctrl.Result{}, nil
 
+}
+
+func (r *RedisClusterReconciler) RdbFinalizer(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
+	r.Recorder.Event(redisCluster, "Normal", "RedisClusterDeleted", "RdbFinalizer logic is executing")
+	return nil
 }
 
 func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.NamespacedName) (error, *corev1.Secret) {
@@ -245,7 +282,7 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 			Labels:    labels,
 		},
 		Spec: v1.DeploymentSpec{
-			Template: rediscluster.Spec.Monitoring,
+			Template: *rediscluster.Spec.Monitoring,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{"rediscluster": req.Name, "app": "monitoring"},
 			},
@@ -273,3 +310,23 @@ func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl
 func (r *RedisClusterReconciler) CreateService(req ctrl.Request, labels map[string]string) *corev1.Service {
 	return redis.CreateService(req.Namespace, req.Name, labels)
 }
+
+// Helper functions to check and remove string from a slice of strings.
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+// func removeString(slice []string, s string) (result []string) {
+// 	for _, item := range slice {
+// 		if item == s {
+// 			continue
+// 		}
+// 		result = append(result, item)
+// 	}
+// 	return
+// }

@@ -192,6 +192,18 @@ var _ = Describe("Reconciler", func() {
 			})
 		})
 	})
+	Context("Pods", func() {
+		When("Redis cluster is created", func() {
+			It("Cluster meet is executed ", func() {
+				svc := &corev1.Pod{}
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name + "-0", Namespace: "default"}, svc)
+				Expect(err).ToNot(HaveOccurred())
+
+				// err = k8sClient.Get(context.Background(), types.NamespacedName{Namespace: "default"}, ev)
+				// Expect(err).ToNot(HaveOccurred())
+			})
+		})
+	})
 })
 
 func CreateRedisCluster() *v1alpha1.RedisCluster {
@@ -208,7 +220,7 @@ func CreateRedisCluster() *v1alpha1.RedisCluster {
 			Auth:     v1alpha1.RedisAuth{},
 			Version:  "5.0.5",
 			Replicas: 1,
-			Monitoring: corev1.PodTemplateSpec{
+			Monitoring: &corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "monitor",
 					Labels: map[string]string{"l1": "l1", "l2": "l2"},
