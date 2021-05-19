@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	finalizer "github.com/containersolutions/redis-operator/internal/finalizers"
+
 	"github.com/go-logr/logr"
 	//"golang.org/x/tools/godoc/redirect"
 	v1 "k8s.io/api/apps/v1"
@@ -47,12 +49,11 @@ import (
 // RedisClusterReconciler reconciles a RedisCluster object
 type RedisClusterReconciler struct {
 	client.Client
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
+	Log        logr.Logger
+	Scheme     *runtime.Scheme
+	Recorder   record.EventRecorder
+	Finalizers []finalizer.Finalizer
 }
-
-var rdbFinalizer = "rediscluster.containersolutions.com/rdbFinalizer"
 
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters/status,verbs=get;update;patch
@@ -79,12 +80,10 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	if err != nil {
 		if errors.IsNotFound(err) {
-			r.Client.Delete(ctx, &corev1.ConfigMap{
-				ObjectMeta: metav1.ObjectMeta{Name: req.Name, Namespace: req.Namespace},
-			})
+			r.Log.Info("The cluster has been deleted")
 		}
-		r.Log.Info("The cluster has been deleted")
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+
 	}
 	var auth = &corev1.Secret{}
 	if len(redisCluster.Spec.Auth.SecretName) > 0 {
@@ -98,30 +97,20 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	if redisCluster.GetDeletionTimestamp().IsZero() {
-		// The object is not being deleted, so if it does not have our finalizer,
-		// then lets add the finalizer and update the object. This is equivalent
-		// registering our finalizer.
-		if !containsString(redisCluster.GetFinalizers(), rdbFinalizer) {
-			controllerutil.AddFinalizer(redisCluster, rdbFinalizer)
-			if err := r.Update(ctx, redisCluster); err != nil {
-				return ctrl.Result{}, err
+	if !redisCluster.GetDeletionTimestamp().IsZero() {
+		for _, f := range r.Finalizers {
+			if containsString(redisCluster.GetFinalizers(), f.GetId()) {
+				r.Log.Info("Running finalizer", "id", f.GetId(), "finalizer", f)
+				finalizerError := f.DeleteMethod(ctx, redisCluster, r.Client)
+				if finalizerError != nil {
+					r.Log.Error(finalizerError, "Finalizer returned error", "id", f.GetId(), "finalizer", f)
+				}
+				controllerutil.RemoveFinalizer(redisCluster, f.GetId())
+				if err := r.Update(ctx, redisCluster); err != nil {
+					return ctrl.Result{}, err
+				}
 			}
 		}
-	} else {
-		// deletion is set
-		// check if the finalizer is there
-		// run finalizer logic
-		// generate event
-		// remove finalizer string
-		if containsString(redisCluster.GetFinalizers(), rdbFinalizer) {
-			r.RdbFinalizer(ctx, redisCluster)
-			controllerutil.RemoveFinalizer(redisCluster, rdbFinalizer)
-			if err := r.Update(ctx, redisCluster); err != nil {
-				return ctrl.Result{}, err
-			}
-		}
-
 	}
 
 	err, _ = r.FindExistingConfigMap(ctx, req)
@@ -192,11 +181,6 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 }
 
-func (r *RedisClusterReconciler) RdbFinalizer(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
-	r.Recorder.Event(redisCluster, "Normal", "RedisClusterDeleted", "RdbFinalizer logic is executing")
-	return nil
-}
-
 func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.NamespacedName) (error, *corev1.Secret) {
 	secret := &corev1.Secret{}
 	err := r.Client.Get(ctx, ns, secret)
@@ -244,11 +228,10 @@ func (r *RedisClusterReconciler) FindExistingService(ctx context.Context, req ct
 
 func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, spec v1alpha1.RedisClusterSpec, secret *corev1.Secret, labels map[string]string) *corev1.ConfigMap {
 	config := spec.Config
-	r.Log.Info("spec config", "sc", spec.Config)
 	if config == "" {
 		config = "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly yes\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n"
 	}
-	r.Log.Info("d config", "config", config)
+
 	cm := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,

@@ -3,6 +3,9 @@ kind: RedisCluster
 metadata:
   name: rediscluster-sample
   namespace: default
+  finalizers:
+    - redis.containersolutions.com/rdb-backup
+    - redis.containersolutions.com/configmap-cleanup
   labels:
     app: redis-graph
     team: team-a
