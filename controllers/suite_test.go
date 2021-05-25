@@ -111,7 +111,7 @@ var _ = AfterSuite(func() {
 
 var _ = Describe("Reconciler", func() {
 	BeforeEach(func() {
-
+		EnsureClusterExistsOrCreate(types.NamespacedName{Name: cluster.Name, Namespace: "default"})
 	})
 	AfterEach(func() {
 
@@ -153,13 +153,22 @@ var _ = Describe("Reconciler", func() {
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, svc)
 				Expect(err).ToNot(HaveOccurred())
 			})
-			It("Pod template labels are passed", func() {
-				// rcluster := &v1alpha1.RedisCluster{}
-				// err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, cluster)
-				// logf.Log.Info("ncluster", "cluster", rcluster)
-				// Expect(err).ToNot(HaveOccurred())
-				// Expect(len(rcluster.Spec.Monitoring.GetObjectMeta().GetLabels())).To(Equal(2))
-			})
+			// It("Pod template labels are passed", func() {
+			// 	rcluster := &v1alpha1.RedisCluster{}
+			// 	err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, cluster)
+			// 	logf.Log.Info("ncluster", "cluster", rcluster)
+			// 	Expect(err).ToNot(HaveOccurred())
+			// 	Expect(len(rcluster.Spec.Monitoring.GetObjectMeta().GetLabels())).To(Equal(2))
+			// })
+			// It("Configmap is deleted when passing finalizers", func() {
+			// 	err := k8sClient.Delete(context.Background(), cluster)
+			// 	Expect(err).ToNot(HaveOccurred())
+
+			// 	cm := &corev1.ConfigMap{}
+			// 	err = k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, cm)
+			// 	Expect(err).To(HaveOccurred())
+
+			// })
 		})
 	})
 	Context("Auth", func() {
@@ -194,6 +203,15 @@ var _ = Describe("Reconciler", func() {
 	})
 })
 
+func EnsureClusterExistsOrCreate(nsName types.NamespacedName) {
+	rc := &v1alpha1.RedisCluster{}
+	err := k8sClient.Get(context.TODO(), nsName, rc)
+	if err != nil {
+		k8sClient.Create(context.TODO(), CreateRedisCluster())
+		time.Sleep(3 * time.Second)
+	}
+}
+
 func CreateRedisCluster() *v1alpha1.RedisCluster {
 	cluster := &v1alpha1.RedisCluster{
 		TypeMeta: metav1.TypeMeta{
@@ -201,8 +219,9 @@ func CreateRedisCluster() *v1alpha1.RedisCluster {
 			APIVersion: "redis.containersolutions.com/v1alpha1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "rediscluster-sample",
-			Namespace: "default",
+			Name:       "rediscluster-sample",
+			Namespace:  "default",
+			Finalizers: []string{"redis.containersolutions.com/configmap-cleanup"},
 		},
 		Spec: v1alpha1.RedisClusterSpec{
 			Auth:     v1alpha1.RedisAuth{},
