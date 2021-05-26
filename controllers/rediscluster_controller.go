@@ -18,6 +18,9 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"strings"
 
 	finalizer "github.com/containersolutions/redis-operator/internal/finalizers"
 
@@ -30,6 +33,7 @@ import (
 	// "k8s.io/apiextensions-apiserver/pkg/client/clientset"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -281,7 +285,29 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 }
 
 func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.RedisClusterSpec, labels map[string]string) *v1.StatefulSet {
-	return redis.CreateStatefulSet(ctx, req, spec, labels)
+	statefulSet := redis.CreateStatefulSet(ctx, req, spec, labels)
+	config := spec.Config
+	configStringMap := redis.ConfigStringToMap(config)
+	withDefaults := redis.MergeWithDefaultConfig(configStringMap)
+	maxMemory := withDefaults["maxmemory"]
+	maxMemoryInt := 0
+	if strings.Contains(maxMemory, "mb") {
+		maxMemory = strings.Replace(maxMemory, "mb", "", 0)
+		maxMemoryInt, _ = strconv.Atoi(maxMemory)
+	}
+	if strings.Contains(maxMemory, "gb") {
+		maxMemory = strings.Replace(maxMemory, "gb", "", 0)
+		maxMemoryInt, _ = strconv.Atoi(maxMemory)
+		maxMemoryInt = maxMemoryInt * 1024
+
+	}
+
+	memoryLimit := fmt.Sprintf("%dMi", maxMemoryInt)
+	for k := range statefulSet.Spec.Template.Spec.Containers {
+		statefulSet.Spec.Template.Spec.Containers[k].Resources.Requests[corev1.ResourceMemory] = resource.MustParse(memoryLimit)
+		statefulSet.Spec.Template.Spec.Containers[k].Resources.Limits[corev1.ResourceMemory] = resource.MustParse(memoryLimit)
+	}
+	return statefulSet
 }
 
 func (r *RedisClusterReconciler) CreateService(req ctrl.Request, labels map[string]string) *corev1.Service {
