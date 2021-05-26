@@ -79,10 +79,11 @@ func TestConfigStringToMap(t *testing.T) {
 
 							maxmemory 1600mb
 							maxmemory-samples 5
+							slaveof 127.0.0.1 6380
 
 							`,
 			},
-			map[string]string{"maxmemory": "1600mb", "maxmemory-samples": "5"},
+			map[string]string{"maxmemory": "1600mb", "maxmemory-samples": "5", "slaveof": "127.0.0.1 6380"},
 		},
 		{
 			"whitespace-between", args{`maxmemory    1600mb

@@ -187,6 +187,16 @@ func ConfigStringToMap(config string) map[string]string {
 	}
 	return nconfig
 }
+
+func MapToConfigString(config map[string]string) string {
+	bynline := make([]string, 0)
+	for k, v := range config {
+		bynline = append(bynline, fmt.Sprintf("%s %s", k, v))
+	}
+
+	return strings.Join(bynline, "\n")
+}
+
 func DefaultConfig() map[string]string {
 	config := make(map[string]string)
 	config["maxmemory"] = "1600mb"
@@ -208,7 +218,7 @@ func MergeWithDefaultConfig(custom map[string]string) map[string]string {
 	defaultConfig := DefaultConfig()
 	overrideNotAllowed := map[string]bool{"dir": true, "cluster-enabled": true, "cluster-require-full-coverage": true, "cluster-node-timeout": true, "cluster-config-file": true}
 	for k := range custom {
-		if overrideNotAllowed[k] == true {
+		if overrideNotAllowed[k] {
 			merged[k] = defaultConfig[k]
 		}
 	}
