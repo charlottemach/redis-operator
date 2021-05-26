@@ -135,6 +135,9 @@ func (r *PodReconciler) PreFilter() predicate.Predicate {
 			return false
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
+			if !isOwnedByUs(e.Object) {
+				return false
+			}
 			return true
 		},
 	}
