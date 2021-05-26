@@ -198,7 +198,7 @@ var _ = Describe("Reconciler", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cmap.Data["redis.conf"]).To(ContainSubstring("requirepass test123"))
 				Expect(cmap.Data["redis.conf"]).To(ContainSubstring("maxmemory 1600mb"))
-				Expect(cmap.Data["redis.conf"]).To(ContainSubstring("cluster-mode yes"))
+				Expect(cmap.Data["redis.conf"]).To(ContainSubstring("cluster-enabled yes"))
 			})
 		})
 	})
