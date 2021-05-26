@@ -23,13 +23,13 @@ import (
 
 // RedisClusterSpec defines the desired state of RedisCluster
 type RedisClusterSpec struct {
-	Auth       RedisAuth          `json:"auth,omitempty"`
-	Version    string             `json:"version,omitempty"`
-	Replicas   int32              `json:"replicas,omitempty"`
-	Image      string             `json:"image,omitempty"`
-	Storage    string             `json:"storage,omitempty"`
-	Monitoring v1.PodTemplateSpec `json:"monitoring,omitempty"`
-	Config     string             `json:"config,omitempty"`
+	Auth       RedisAuth           `json:"auth,omitempty"`
+	Version    string              `json:"version,omitempty"`
+	Replicas   int32               `json:"replicas,omitempty"`
+	Image      string              `json:"image,omitempty"`
+	Storage    string              `json:"storage,omitempty"`
+	Monitoring *v1.PodTemplateSpec `json:"monitoring,omitempty"`
+	Config     string              `json:"config,omitempty"`
 }
 
 // RedisClusterStatus defines the observed state of RedisCluster

@@ -15,7 +15,6 @@ import (
 	"github.com/go-logr/logr"
 	redisclient "github.com/go-redis/redis/v8"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -46,12 +45,6 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	err := r.Client.Get(ctx, req.NamespacedName, pod)
 
 	if err != nil {
-		if !errors.IsNotFound(err) {
-			// find stateful set
-			// find rediscluster
-			// delete pod from cluster
-			r.Log.Info("Failed to get a pod", "namespacedname", req.NamespacedName)
-		}
 		return ctrl.Result{}, err
 	}
 	nsNameCluster := types.NamespacedName{
@@ -60,8 +53,9 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 	err, redisCluster := r.FindRedisCluster(ctx, nsNameCluster)
 	if err != nil {
-		r.Log.Error(err, "can't find redis cluster", "nsname", nsNameCluster)
+		return ctrl.Result{}, err
 	}
+
 	// get status
 	redisSecret := ""
 	if redisCluster.Spec.Auth.SecretName != "" {

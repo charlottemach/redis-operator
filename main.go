@@ -20,6 +20,8 @@ import (
 	"flag"
 	"os"
 
+	finalizer "github.com/containersolutions/redis-operator/internal/finalizers"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -80,9 +82,14 @@ func main() {
 	}
 
 	if err = (&controllers.RedisClusterReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("RedisCluster"),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Log:      ctrl.Log.WithName("controllers").WithName("RedisCluster"),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("rediscluster-controller"),
+		Finalizers: []finalizer.Finalizer{
+			&finalizer.BackupFinalizer{},
+			&finalizer.ConfigMapCleanupFinalizer{},
+		},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "RedisCluster")
 		os.Exit(1)
