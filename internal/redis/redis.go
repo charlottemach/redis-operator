@@ -94,6 +94,10 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.Redi
 							Command:        []string{"redis-server", "/conf/redis.conf"},
 							LivenessProbe:  CreateProbe(20, 5),
 							ReadinessProbe: CreateProbe(15, 5),
+							Resources: corev1.ResourceRequirements{
+								Limits:   corev1.ResourceList{},
+								Requests: corev1.ResourceList{},
+							},
 						},
 					},
 
@@ -168,6 +172,65 @@ func CreateService(Namespace, Name string, labels map[string]string) *corev1.Ser
 			ClusterIP: "None",
 		},
 	}
+}
+
+func ConfigStringToMap(config string) map[string]string {
+	//	strings.Split(config, b)
+	nconfig := make(map[string]string)
+	newlinestring := strings.Split(strings.ReplaceAll(config, "\r\n", "\n"), "\n")
+
+	for _, v := range newlinestring {
+		kv := strings.SplitN(v, ` `, 2)
+		if strings.TrimSpace(kv[0]) != "" {
+			nconfig[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+		}
+	}
+	return nconfig
+}
+
+func MapToConfigString(config map[string]string) string {
+	bynline := make([]string, 0)
+	for k, v := range config {
+		bynline = append(bynline, fmt.Sprintf("%s %s", k, v))
+	}
+
+	return strings.Join(bynline, "\n")
+}
+
+func DefaultConfig() map[string]string {
+	config := make(map[string]string)
+	config["maxmemory"] = "1600mb"
+	config["maxmemory-samples"] = "5"
+	config["maxmemory-policy"] = "allkeys-lru"
+	config["appendonly"] = "yes"
+	config["protected-mode"] = "no"
+	config["dir"] = "/data"
+	config["cluster-enabled"] = "yes"
+	config["cluster-require-full-coverage"] = "no"
+	config["cluster-node-timeout"] = "15000"
+	config["cluster-config-file"] = "/data/nodes.conf"
+	config["cluster-migration-barrier"] = "1"
+	return config
+}
+
+func MergeWithDefaultConfig(custom map[string]string) map[string]string {
+	merged := custom
+	defaultConfig := DefaultConfig()
+
+	overrideNotAllowed := map[string]bool{"dir": true, "cluster-enabled": true, "cluster-require-full-coverage": true, "cluster-node-timeout": true, "cluster-config-file": true}
+	for k := range custom {
+		if overrideNotAllowed[k] {
+			merged[k] = defaultConfig[k]
+		}
+	}
+
+	for k, v := range defaultConfig {
+		if merged[k] == "" {
+			merged[k] = v
+		}
+	}
+
+	return merged
 }
 
 func slotsPerNode(numOfNodes int, slots int) (int, int) {

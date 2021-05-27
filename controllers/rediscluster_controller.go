@@ -19,6 +19,8 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	finalizer "github.com/containersolutions/redis-operator/internal/finalizers"
 
@@ -31,6 +33,7 @@ import (
 	// "k8s.io/apiextensions-apiserver/pkg/client/clientset"
 
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -228,9 +231,15 @@ func (r *RedisClusterReconciler) FindExistingService(ctx context.Context, req ct
 
 func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, spec v1alpha1.RedisClusterSpec, secret *corev1.Secret, labels map[string]string) *corev1.ConfigMap {
 	config := spec.Config
-	if config == "" {
-		config = "maxmemory 1600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly yes\nprotected-mode no\ndir /data\ncluster-enabled yes\ncluster-require-full-coverage no\ncluster-node-timeout 15000\ncluster-config-file /data/nodes.conf\ncluster-migration-barrier 1\n"
+	configStringMap := redis.ConfigStringToMap(config)
+
+	if val, exists := secret.Data["requirepass"]; exists {
+		configStringMap["requirepass"] = string(val)
+	} else if secret.Name != "" {
+		r.Log.Info("requirepass field not found in secret", "secretdata", secret.Data)
 	}
+
+	withDefaults := redis.MergeWithDefaultConfig(configStringMap)
 
 	cm := corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -238,19 +247,8 @@ func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, spec v1alpha1
 			Namespace: req.Namespace,
 			Labels:    labels,
 		},
-		Data: map[string]string{"redis.conf": config},
+		Data: map[string]string{"redis.conf": redis.MapToConfigString(withDefaults)},
 	}
-	if val, exists := secret.Data["requirepass"]; exists {
-		cm.Data["redis.conf"] = cm.Data["redis.conf"] + fmt.Sprintf("\nrequirepass \"%s\"\n", val)
-	} else if secret.Name != "" {
-		r.Log.Info("requirepass field not found in secret", "secretdata", secret.Data)
-	}
-	// add cluster config file entries
-	cm.Data["redis.conf"] = cm.Data["redis.conf"] + "cluster-config-file /data/nodes.conf\n"
-	cm.Data["redis.conf"] = cm.Data["redis.conf"] + "dir /data/\n"
-	cm.Data["redis.conf"] = cm.Data["redis.conf"] + "cluster-enabled yes\n"
-	cm.Data["redis.conf"] = cm.Data["redis.conf"] + "cluster-require-full-coverage no\n"
-	cm.Data["redis.conf"] = cm.Data["redis.conf"] + "cluster-migration-barrier 1\n"
 
 	r.Log.Info("Generated Configmap", "configmap", cm)
 	r.Log.Info("Spec config", "speconfig", spec.Config)
@@ -287,7 +285,33 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 }
 
 func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.RedisClusterSpec, labels map[string]string) *v1.StatefulSet {
-	return redis.CreateStatefulSet(ctx, req, spec, labels)
+	statefulSet := redis.CreateStatefulSet(ctx, req, spec, labels)
+	config := spec.Config
+	configStringMap := redis.ConfigStringToMap(config)
+	withDefaults := redis.MergeWithDefaultConfig(configStringMap)
+	maxMemory := withDefaults["maxmemory"]
+	r.Log.Info("Merged config", "withDefaults", withDefaults)
+	maxMemoryInt := 0
+	if strings.Contains(maxMemory, "mb") {
+		maxMemory = strings.Replace(maxMemory, "mb", "", 1)
+		maxMemoryInt, _ = strconv.Atoi(maxMemory)
+	}
+	if strings.Contains(maxMemory, "gb") {
+		maxMemory = strings.Replace(maxMemory, "gb", "", 1)
+		maxMemoryInt, _ = strconv.Atoi(maxMemory)
+		maxMemoryInt = maxMemoryInt * 1024
+
+	}
+
+	memoryLimit := fmt.Sprintf("%dMi", maxMemoryInt+300) // add 300 mb from config maxmemory
+	r.Log.Info("New memory limits", "memory", resource.MustParse(memoryLimit))
+
+	for k := range statefulSet.Spec.Template.Spec.Containers {
+		statefulSet.Spec.Template.Spec.Containers[k].Resources.Requests[corev1.ResourceMemory] = resource.MustParse(memoryLimit)
+		statefulSet.Spec.Template.Spec.Containers[k].Resources.Limits[corev1.ResourceMemory] = resource.MustParse(memoryLimit)
+		r.Log.Info("Stateful set container memory", "memory", statefulSet.Spec.Template.Spec.Containers[k].Resources.Limits[corev1.ResourceMemory])
+	}
+	return statefulSet
 }
 
 func (r *RedisClusterReconciler) CreateService(req ctrl.Request, labels map[string]string) *corev1.Service {

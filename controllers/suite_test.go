@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
@@ -137,22 +138,27 @@ var _ = Describe("Reconciler", func() {
 				cmap := &corev1.ConfigMap{}
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, cmap)
 				Expect(err).ToNot(HaveOccurred())
+				Expect(cmap.Data["redis.conf"]).To(ContainSubstring("maxmemory 500mb"))
+				Expect(cmap.Data["redis.conf"]).To(ContainSubstring("cluster-enabled yes"))
 			})
 			It("Stateful set is created", func() {
 				sset := &v1.StatefulSet{}
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, sset)
+				log.Log.Logger.Error(err, "error", "statefulset", sset.Spec.Template.Spec.Containers[0].Resources)
 				Expect(err).ToNot(HaveOccurred())
+				cmap := &corev1.ConfigMap{}
+				err = k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, cmap)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(sset.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String()).To(Equal("800Mi"))
+
 			})
 			It("Service set is created", func() {
 				svc := &corev1.Service{}
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, svc)
 				Expect(err).ToNot(HaveOccurred())
 			})
-			It("Stateful set is created", func() {
-				svc := &corev1.Service{}
-				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, svc)
-				Expect(err).ToNot(HaveOccurred())
-			})
+
 			// It("Pod template labels are passed", func() {
 			// 	rcluster := &v1alpha1.RedisCluster{}
 			// 	err := k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, cluster)
@@ -196,7 +202,7 @@ var _ = Describe("Reconciler", func() {
 				cmap := &corev1.ConfigMap{}
 				err = k8sClient.Get(context.Background(), types.NamespacedName{Name: clusterName, Namespace: "default"}, cmap)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(cmap.Data["redis.conf"]).To(ContainSubstring("requirepass \"test123\""))
+				Expect(cmap.Data["redis.conf"]).To(ContainSubstring("requirepass test123"))
 
 			})
 		})
@@ -227,6 +233,10 @@ func CreateRedisCluster() *v1alpha1.RedisCluster {
 			Auth:     v1alpha1.RedisAuth{},
 			Version:  "5.0.5",
 			Replicas: 1,
+			Config: `
+			maxmemory 500mb
+			
+	`,
 			Monitoring: &corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   "monitor",

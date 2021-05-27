@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -61,5 +62,77 @@ func TestSlotsNode(t *testing.T) {
 				t.Errorf("Expected sequence %d, Start:%d (got %d), End:%d (got %d)", slots[i].Nodes, slots[i].Slots[j].Start, nodeSlots[j].Start, slots[i].Slots[j].End, nodeSlots[j].End)
 			}
 		}
+	}
+}
+
+func TestConfigStringToMap(t *testing.T) {
+	type args struct {
+		config string
+	}
+	tests := []struct {
+		name string
+		args args
+		want map[string]string
+	}{
+		{
+			"single-entry", args{`maxmemory 500mb`},
+			map[string]string{"maxmemory": "500mb"},
+		},
+		{
+			"whitespace-around", args{`
+
+							maxmemory 500mb
+							maxmemory-samples 5
+							slaveof 127.0.0.1 6380
+
+							`,
+			},
+			map[string]string{"maxmemory": "500mb", "maxmemory-samples": "5", "slaveof": "127.0.0.1 6380"},
+		},
+		{
+			"whitespace-between", args{`maxmemory    500mb
+							maxmemory-samples 5`,
+			},
+			map[string]string{"maxmemory": "500mb", "maxmemory-samples": "5"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ConfigStringToMap(tt.args.config); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ConfigStringToMap() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMergeWithDefaultConfig(t *testing.T) {
+	type args struct {
+		custom map[string]string
+	}
+	tests := []struct {
+		name string
+		args args
+		want map[string]string
+	}{
+		{
+			"forbidden-override",
+			args{map[string]string{"maxmemory": "2gb", "cluster-enabled": "no"}},
+			map[string]string{"maxmemory": "2gb", "cluster-enabled": "yes"},
+		},
+		{
+			"defaults-not-set",
+			args{map[string]string{}},
+			map[string]string{"maxmemory": "1600mb", "cluster-enabled": "yes"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MergeWithDefaultConfig(tt.args.custom)
+			for k, v := range tt.want {
+				if got[k] != v {
+					t.Errorf("MergeWithDefaultConfig() = %v, want %v", got, tt.want)
+				}
+			}
+		})
 	}
 }
