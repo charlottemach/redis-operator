@@ -290,22 +290,26 @@ func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl
 	configStringMap := redis.ConfigStringToMap(config)
 	withDefaults := redis.MergeWithDefaultConfig(configStringMap)
 	maxMemory := withDefaults["maxmemory"]
+	r.Log.Info("Merged config", "withDefaults", withDefaults)
 	maxMemoryInt := 0
 	if strings.Contains(maxMemory, "mb") {
-		maxMemory = strings.Replace(maxMemory, "mb", "", 0)
+		maxMemory = strings.Replace(maxMemory, "mb", "", 1)
 		maxMemoryInt, _ = strconv.Atoi(maxMemory)
 	}
 	if strings.Contains(maxMemory, "gb") {
-		maxMemory = strings.Replace(maxMemory, "gb", "", 0)
+		maxMemory = strings.Replace(maxMemory, "gb", "", 1)
 		maxMemoryInt, _ = strconv.Atoi(maxMemory)
 		maxMemoryInt = maxMemoryInt * 1024
 
 	}
 
-	memoryLimit := fmt.Sprintf("%dMi", maxMemoryInt)
+	memoryLimit := fmt.Sprintf("%dMi", maxMemoryInt+300) // add 300 mb from config maxmemory
+	r.Log.Info("New memory limits", "memory", resource.MustParse(memoryLimit))
+
 	for k := range statefulSet.Spec.Template.Spec.Containers {
 		statefulSet.Spec.Template.Spec.Containers[k].Resources.Requests[corev1.ResourceMemory] = resource.MustParse(memoryLimit)
 		statefulSet.Spec.Template.Spec.Containers[k].Resources.Limits[corev1.ResourceMemory] = resource.MustParse(memoryLimit)
+		r.Log.Info("Stateful set container memory", "memory", statefulSet.Spec.Template.Spec.Containers[k].Resources.Limits[corev1.ResourceMemory])
 	}
 	return statefulSet
 }

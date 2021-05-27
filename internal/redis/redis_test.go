@@ -75,21 +75,25 @@ func TestConfigStringToMap(t *testing.T) {
 		want map[string]string
 	}{
 		{
+			"single-entry", args{`maxmemory 500mb`},
+			map[string]string{"maxmemory": "500mb"},
+		},
+		{
 			"whitespace-around", args{`
 
-							maxmemory 1600mb
+							maxmemory 500mb
 							maxmemory-samples 5
 							slaveof 127.0.0.1 6380
 
 							`,
 			},
-			map[string]string{"maxmemory": "1600mb", "maxmemory-samples": "5", "slaveof": "127.0.0.1 6380"},
+			map[string]string{"maxmemory": "500mb", "maxmemory-samples": "5", "slaveof": "127.0.0.1 6380"},
 		},
 		{
-			"whitespace-between", args{`maxmemory    1600mb
+			"whitespace-between", args{`maxmemory    500mb
 							maxmemory-samples 5`,
 			},
-			map[string]string{"maxmemory": "1600mb", "maxmemory-samples": "5"},
+			map[string]string{"maxmemory": "500mb", "maxmemory-samples": "5"},
 		},
 	}
 	for _, tt := range tests {

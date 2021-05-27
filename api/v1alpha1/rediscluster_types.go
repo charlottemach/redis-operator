@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// TODO: Add resource limits
 // RedisClusterSpec defines the desired state of RedisCluster
 type RedisClusterSpec struct {
 	Auth       RedisAuth           `json:"auth,omitempty"`

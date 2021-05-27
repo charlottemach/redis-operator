@@ -216,6 +216,7 @@ func DefaultConfig() map[string]string {
 func MergeWithDefaultConfig(custom map[string]string) map[string]string {
 	merged := custom
 	defaultConfig := DefaultConfig()
+
 	overrideNotAllowed := map[string]bool{"dir": true, "cluster-enabled": true, "cluster-require-full-coverage": true, "cluster-node-timeout": true, "cluster-config-file": true}
 	for k := range custom {
 		if overrideNotAllowed[k] {
