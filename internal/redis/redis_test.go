@@ -2,6 +2,7 @@ package redis
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -95,6 +96,13 @@ func TestConfigStringToMap(t *testing.T) {
 			},
 			map[string]string{"maxmemory": "500mb", "maxmemory-samples": "5"},
 		},
+		{
+			"module-load", args{`
+							module load /usr/local/lib.so
+							maxmemory-samples 5`,
+			},
+			map[string]string{"maxmemory-samples": "5", "module": "load /usr/local/lib.so"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -161,6 +169,29 @@ func TestConvertRedisMemToMbytes(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("ConvertRedisMemToMbytes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMapToConfigString(t *testing.T) {
+	type args struct {
+		config map[string]string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{"one", args{config: map[string]string{"module": "load /usr/lib/m.so"}}, "module load /usr/lib/m.so"},
+		{"two", args{config: map[string]string{"module": "load /usr/lib/m.so", "maxmemory": "500mb"}},
+			`module load /usr/lib/m.so
+maxmemory 500mb`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MapToConfigString(tt.args.config); strings.TrimSpace(got) != tt.want {
+				t.Errorf("MapToConfigString() = %v, want %v", got, tt.want)
 			}
 		})
 	}
