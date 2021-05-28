@@ -149,7 +149,6 @@ var _ = Describe("Reconciler", func() {
 				cmap := &corev1.ConfigMap{}
 				err = k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, cmap)
 				Expect(err).ToNot(HaveOccurred())
-
 				Expect(sset.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String()).To(Equal("800Mi"))
 
 			})

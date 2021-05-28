@@ -136,3 +136,32 @@ func TestMergeWithDefaultConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestConvertRedisMemToMbytes(t *testing.T) {
+	type args struct {
+		maxMemory string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    int
+		wantErr bool
+	}{
+		{"mb", args{maxMemory: "300mb"}, 300, false},
+		{"m", args{maxMemory: "300m"}, 300, false},
+		{"kb", args{maxMemory: "3000kb"}, 2, false},
+		{"gb", args{maxMemory: "5gb"}, 5120, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ConvertRedisMemToMbytes(tt.args.maxMemory)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ConvertRedisMemToMbytes() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ConvertRedisMemToMbytes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

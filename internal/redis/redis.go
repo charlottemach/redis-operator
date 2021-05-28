@@ -273,3 +273,29 @@ func SplitNodeSlots(nodesTotal int) []*NodesSlots {
 	}
 	return nodesSlots
 }
+
+func ConvertRedisMemToMbytes(maxMemory string) (int, error) {
+	maxMemory = strings.ToLower(maxMemory)
+	var maxMemoryInt int
+	var err error
+	if strings.Contains(maxMemory, "kb") || strings.Contains(maxMemory, "k") {
+		maxMemory = strings.Replace(maxMemory, "kb", "", 1)
+		maxMemory = strings.Replace(maxMemory, "k", "", 1)
+		maxMemoryInt, err = strconv.Atoi(maxMemory)
+		maxMemoryInt = maxMemoryInt / 1024
+
+	} else if strings.Contains(maxMemory, "mb") || strings.Contains(maxMemory, "m") {
+		maxMemory = strings.Replace(maxMemory, "mb", "", 1)
+		maxMemory = strings.Replace(maxMemory, "m", "", 1)
+		maxMemoryInt, err = strconv.Atoi(maxMemory)
+	} else if strings.Contains(maxMemory, "gb") || strings.Contains(maxMemory, "g") {
+		maxMemory = strings.Replace(maxMemory, "gb", "", 1)
+		maxMemory = strings.Replace(maxMemory, "g", "", 1)
+		maxMemoryInt, err = strconv.Atoi(maxMemory)
+		maxMemoryInt = maxMemoryInt * 1024
+	} else {
+		maxMemoryInt, err = strconv.Atoi(maxMemory)
+		maxMemoryInt = maxMemoryInt / 1024 / 1024
+	}
+	return maxMemoryInt, err
+}
