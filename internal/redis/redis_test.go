@@ -183,9 +183,9 @@ func TestMapToConfigString(t *testing.T) {
 		args args
 		want string
 	}{
-		{"one", args{config: map[string]string{"module": "load /usr/lib/m.so"}}, "module load /usr/lib/m.so"},
-		{"two", args{config: map[string]string{"module": "load /usr/lib/m.so", "maxmemory": "500mb"}},
-			`module load /usr/lib/m.so
+		{"one", args{config: map[string]string{"moduleload": "/usr/lib/m.so"}}, "moduleload /usr/lib/m.so"},
+		{"two", args{config: map[string]string{"moduleload": "/usr/lib/m.so", "maxmemory": "500mb"}},
+			`moduleload /usr/lib/m.so
 maxmemory 500mb`},
 	}
 	for _, tt := range tests {
