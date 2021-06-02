@@ -31,7 +31,9 @@ import (
 	redisclient "github.com/go-redis/redis/v8"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	finalizer "github.com/containersolutions/redis-operator/internal/finalizers"
 
@@ -85,21 +87,9 @@ type RedisClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.2/pkg/reconcile
 
-func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
-	r.Log.Info("RedisCluster reconciler called", "name", req.Name, "ns", req.Namespace)
-
-	redisCluster := &v1alpha1.RedisCluster{}
-	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			r.Log.Info("The cluster has been deleted")
-		}
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-
-	}
+func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req ctrl.Request, redisCluster *v1alpha1.RedisCluster) (ctrl.Result, error) {
 	var auth = &corev1.Secret{}
+	var err error
 	if len(redisCluster.Spec.Auth.SecretName) > 0 {
 		err, auth = r.GetSecret(ctx, types.NamespacedName{
 			Name:      redisCluster.Spec.Auth.SecretName,
@@ -193,20 +183,18 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// return
 	}
 
-	// Instance are set up and replica count is sufficient
+	return ctrl.Result{}, nil
+}
 
-	// check that all instances aware of each other
-
-	_ = r.Log.WithValues("rediscluster - pod reconciler", req.NamespacedName)
-	r.Log.Info("Pod reconciler", "ns", req.NamespacedName)
-	pod := &corev1.Pod{}
-	err = r.Client.Get(ctx, req.NamespacedName, pod)
-
-	if err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+func (r *RedisClusterReconciler) ReconcilePod(ctx context.Context, req ctrl.Request, pod *corev1.Pod) (ctrl.Result, error) {
+	nsNameCluster := types.NamespacedName{
+		Name:      pod.GetLabels()["rediscluster"],
+		Namespace: req.Namespace,
 	}
-
-	// get status
+	err, redisCluster := r.FindRedisCluster(ctx, nsNameCluster)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	redisSecret := ""
 	if redisCluster.Spec.Auth.SecretName != "" {
 		secret := &corev1.Secret{}
@@ -238,6 +226,27 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
+	r.Log.Info("RedisCluster reconciler called", "name", req.Name, "ns", req.Namespace)
+
+	redisCluster := &v1alpha1.RedisCluster{}
+	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
+
+	if err == nil {
+		return r.ReconcileClusterObject(ctx, req, redisCluster)
+	}
+
+	pod := &corev1.Pod{}
+	err = r.Client.Get(ctx, req.NamespacedName, pod)
+
+	if err == nil {
+		return r.ReconcilePod(ctx, req, pod)
+	}
+
+	return ctrl.Result{}, client.IgnoreNotFound(err)
 
 }
 
@@ -254,7 +263,9 @@ func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.Namespa
 func (r *RedisClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.RedisCluster{}).
-		For(&corev1.Pod{}).
+		Watches(
+			&source.Kind{Type: &corev1.Pod{}},
+			&handler.EnqueueRequestForObject{}).
 		Owns(&v1.StatefulSet{}).
 		Owns(&corev1.ConfigMap{}).
 		WithEventFilter(r.PreFilter()).
