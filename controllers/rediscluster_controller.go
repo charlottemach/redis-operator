@@ -168,6 +168,8 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			create_svc_err := r.Client.Create(ctx, svc)
 			if create_svc_err != nil && errors.IsAlreadyExists(create_svc_err) {
 				r.Log.Info("Svc already exists")
+			} else if create_svc_err != nil {
+				r.Log.Error(err, "Creating service failed")
 			}
 		} else {
 			r.Log.Error(err, "Getting svc data failed")
