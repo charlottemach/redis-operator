@@ -45,7 +45,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	err := r.Client.Get(ctx, req.NamespacedName, pod)
 
 	if err != nil {
-		return ctrl.Result{}, err
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	nsNameCluster := types.NamespacedName{
 		Name:      pod.GetLabels()["rediscluster"],
