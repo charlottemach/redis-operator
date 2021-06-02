@@ -256,3 +256,12 @@ func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl
 func (r *RedisClusterReconciler) CreateService(req ctrl.Request, labels map[string]string) *corev1.Service {
 	return redis.CreateService(req.Namespace, req.Name, labels)
 }
+
+func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.NamespacedName) (error, *corev1.Secret) {
+	secret := &corev1.Secret{}
+	err := r.Client.Get(ctx, ns, secret)
+	if err != nil {
+		r.Log.Error(err, "Getting secret failed", "secret", ns)
+	}
+	return err, secret
+}

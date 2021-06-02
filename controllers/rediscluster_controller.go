@@ -40,7 +40,6 @@ import (
 	// "k8s.io/apiextensions-apiserver/pkg/client/clientset"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -86,15 +85,6 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	return ctrl.Result{}, client.IgnoreNotFound(err)
 
-}
-
-func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.NamespacedName) (error, *corev1.Secret) {
-	secret := &corev1.Secret{}
-	err := r.Client.Get(ctx, ns, secret)
-	if err != nil {
-		r.Log.Error(err, "Getting secret failed", "secret", ns)
-	}
-	return err, secret
 }
 
 // SetupWithManager sets up the controller with the Manager.
