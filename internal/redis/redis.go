@@ -36,7 +36,7 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.Redi
 		redisImage = "redislabs/redisgraph:2.4.1"
 	}
 	if storage == "" {
-		storage = "12Gi"
+		storage = "1Gi"
 	}
 	redisStatefulSet := &v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
