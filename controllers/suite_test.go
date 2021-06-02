@@ -227,6 +227,7 @@ func CreateRedisCluster() *v1alpha1.RedisCluster {
 			Name:       "rediscluster-sample",
 			Namespace:  "default",
 			Finalizers: []string{"redis.containersolutions.com/configmap-cleanup"},
+			Labels:     map[string]string{"team": "team-a"},
 		},
 		Spec: v1alpha1.RedisClusterSpec{
 			Auth:     v1alpha1.RedisAuth{},
