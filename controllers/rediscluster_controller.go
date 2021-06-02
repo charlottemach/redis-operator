@@ -30,10 +30,10 @@ import (
 
 	redisclient "github.com/go-redis/redis/v8"
 	"k8s.io/apimachinery/pkg/labels"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	finalizer "github.com/containersolutions/redis-operator/internal/finalizers"
 
@@ -60,6 +60,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
+
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // RedisClusterReconciler reconciles a RedisCluster object
@@ -76,16 +78,6 @@ type RedisClusterReconciler struct {
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps/v1,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
-
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the RedisCluster object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.2/pkg/reconcile
 
 func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req ctrl.Request, redisCluster *v1alpha1.RedisCluster) (ctrl.Result, error) {
 	var auth = &corev1.Secret{}
@@ -263,12 +255,9 @@ func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.Namespa
 func (r *RedisClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.RedisCluster{}).
-		Watches(
-			&source.Kind{Type: &corev1.Pod{}},
-			&handler.EnqueueRequestForObject{}).
+		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(r.PreFilter())).
+		Watches(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(r.PreFilter())).
 		Owns(&v1.StatefulSet{}).
-		Owns(&corev1.ConfigMap{}).
-		WithEventFilter(r.PreFilter()).
 		Complete(r)
 }
 
@@ -302,7 +291,7 @@ func (r *RedisClusterReconciler) FindExistingService(ctx context.Context, req ct
 func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, spec v1alpha1.RedisClusterSpec, secret *corev1.Secret, labels map[string]string) *corev1.ConfigMap {
 	config := spec.Config
 	configStringMap := redis.ConfigStringToMap(config)
-
+	labels["rediscluster"] = req.Name
 	if val, exists := secret.Data["requirepass"]; exists {
 		configStringMap["requirepass"] = string(val)
 	} else if secret.Name != "" {
@@ -435,16 +424,19 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName 
 func (r *RedisClusterReconciler) PreFilter() predicate.Predicate {
 	return predicate.Funcs{
 		UpdateFunc: func(e event.UpdateEvent) bool {
-			if !isOwnedByUs(e.ObjectNew) {
+			if !r.isOwnedByUs(e.ObjectNew) {
 				return false
 			}
 			return true
 		},
 		CreateFunc: func(e event.CreateEvent) bool {
-			return false
+			if !r.isOwnedByUs(e.Object) {
+				return false
+			}
+			return true
 		},
 		DeleteFunc: func(e event.DeleteEvent) bool {
-			if !isOwnedByUs(e.Object) {
+			if !r.isOwnedByUs(e.Object) {
 				return false
 			}
 			return true
@@ -452,8 +444,10 @@ func (r *RedisClusterReconciler) PreFilter() predicate.Predicate {
 	}
 }
 
-func isOwnedByUs(o client.Object) bool {
+func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
+
 	labels := o.GetLabels()
+
 	if _, found := labels["rediscluster"]; found {
 		return true
 	}
