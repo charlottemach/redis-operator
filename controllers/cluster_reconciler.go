@@ -61,40 +61,43 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		}
 	}
 
-	err, cmap := r.FindExistingConfigMap(ctx, req)
+	err, config_map := r.FindExistingConfigMap(ctx, req)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
-			cmap = r.CreateConfigMap(req, redisCluster.Spec, auth, redisCluster.GetObjectMeta().GetLabels())
-			ctrl.SetControllerReference(redisCluster, cmap, r.Scheme)
-			r.Log.Info("Creating configmap", "configmap", cmap)
-			create_map_err := r.Client.Create(ctx, cmap)
+			config_map = r.CreateConfigMap(req, redisCluster.Spec, auth, redisCluster.GetObjectMeta().GetLabels())
+			ctrl.SetControllerReference(redisCluster, config_map, r.Scheme)
+			r.Log.Info("Creating configmap", "configmap", config_map)
+			create_map_err := r.Client.Create(ctx, config_map)
 			if create_map_err != nil {
 				r.Log.Error(create_map_err, "Error when creating configmap")
+				return ctrl.Result{}, create_map_err
 			}
 		} else {
 			r.Log.Error(err, "Getting configmap data failed")
 		}
 	}
-	err, sset := r.FindExistingStatefulSet(ctx, req)
+
+	err, stateful_set := r.FindExistingStatefulSet(ctx, req)
+	var create_sset_err error
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// create stateful set
-			sset, err := r.CreateStatefulSet(ctx, req, redisCluster.Spec, redisCluster.ObjectMeta.GetLabels(), cmap)
-			if err != nil {
+			stateful_set, create_sset_err = r.CreateStatefulSet(ctx, req, redisCluster.Spec, redisCluster.ObjectMeta.GetLabels(), config_map)
+			if create_sset_err != nil {
 				r.Log.Error(err, "Error when creating StatefulSet")
 				return ctrl.Result{}, err
 			}
-			ctrl.SetControllerReference(redisCluster, sset, r.Scheme)
-			create_err := r.Client.Create(ctx, sset)
-			if create_err != nil && errors.IsAlreadyExists(create_err) {
+			ctrl.SetControllerReference(redisCluster, stateful_set, r.Scheme)
+			create_sset_err = r.Client.Create(ctx, stateful_set)
+			if create_sset_err != nil && errors.IsAlreadyExists(create_sset_err) {
 				r.Log.Info("StatefulSet already exists")
 			}
 			if redisCluster.Spec.Monitoring != nil {
 				mdep := r.CreateMonitoringDeployment(ctx, req, redisCluster, redisCluster.ObjectMeta.GetLabels())
 				ctrl.SetControllerReference(redisCluster, mdep, r.Scheme)
 				mdep_create_err := r.Client.Create(ctx, mdep)
-				if mdep_create_err != nil && errors.IsAlreadyExists(create_err) {
+				if mdep_create_err != nil && errors.IsAlreadyExists(create_sset_err) {
 					r.Log.Info("Monitoring pod already exists")
 				} else if mdep_create_err != nil {
 					r.Log.Error(mdep_create_err, "Error creating monitoring deployment")
@@ -106,27 +109,26 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 		}
 	}
-	err, _ = r.FindExistingService(ctx, req)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			svc := r.CreateService(req, redisCluster.GetObjectMeta().GetLabels())
-			ctrl.SetControllerReference(redisCluster, svc, r.Scheme)
-			create_svc_err := r.Client.Create(ctx, svc)
+	create_svc_err, service := r.FindExistingService(ctx, req)
+	if create_svc_err != nil {
+		if errors.IsNotFound(create_svc_err) {
+			service = r.CreateService(req, redisCluster.GetObjectMeta().GetLabels())
+			ctrl.SetControllerReference(redisCluster, service, r.Scheme)
+			create_svc_err := r.Client.Create(ctx, service)
 			if create_svc_err != nil && errors.IsAlreadyExists(create_svc_err) {
 				r.Log.Info("Svc already exists")
 			} else if create_svc_err != nil {
-				r.Log.Error(err, "Creating service failed")
+				return ctrl.Result{}, create_svc_err
 			}
 		} else {
 			r.Log.Error(err, "Getting svc data failed")
 
 		}
 	}
-	if sset != nil && sset.Spec.Replicas != &(redisCluster.Spec.Replicas) {
-		// fix replicas
-		// return
-	}
-
+	r.UpdateInternalObjectReference(config_map, redisCluster.GetName())
+	r.UpdateInternalObjectReference(stateful_set, redisCluster.GetName())
+	r.UpdateInternalObjectReference(service, redisCluster.GetName())
+	r.RefreshResources(redisCluster.GetName())
 	return ctrl.Result{}, nil
 }
 
@@ -265,3 +267,5 @@ func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.Namespa
 	}
 	return err, secret
 }
+
+func (r *RedisClusterReconciler) RefreshConfigMap() {}

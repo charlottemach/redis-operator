@@ -1,12 +1,12 @@
 package controllers
 
 import (
+	"reflect"
 	"strconv"
 
 	//"golang.org/x/tools/godoc/redirect"
 
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
-	"reflect"
 
 	"context"
 	"fmt"
@@ -30,16 +30,22 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
+func (r *RedisClusterReconciler) FindRedisCluster(ctx context.Context, ns types.NamespacedName) (*v1alpha1.RedisCluster, error) {
+	redisCluster := &v1alpha1.RedisCluster{}
+	err := r.Client.Get(ctx, ns, redisCluster)
+	return redisCluster, err
+}
+
 func (r *RedisClusterReconciler) ReconcilePod(ctx context.Context, req ctrl.Request, pod *corev1.Pod) (ctrl.Result, error) {
-	nsNameCluster := types.NamespacedName{
+	redisCluster, cluster_find_error := r.FindRedisCluster(ctx, types.NamespacedName{
 		Name:      pod.GetLabels()["rediscluster"],
 		Namespace: req.Namespace,
+	})
+	if cluster_find_error != nil {
+		return ctrl.Result{}, cluster_find_error
 	}
-	err, redisCluster := r.FindRedisCluster(ctx, nsNameCluster)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	redisSecret := ""
+	var redisSecret string
+	var err error
 	if redisCluster.Spec.Auth.SecretName != "" {
 		secret := &corev1.Secret{}
 		err := r.Client.Get(ctx, types.NamespacedName{Name: redisCluster.Spec.Auth.SecretName, Namespace: req.Namespace}, secret)
@@ -68,7 +74,7 @@ func (r *RedisClusterReconciler) ReconcilePod(ctx context.Context, req ctrl.Requ
 		r.AssignSlots(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
 	}
-
+	r.RefreshResources(redisCluster.Name)
 	return ctrl.Result{}, nil
 }
 
@@ -118,12 +124,6 @@ func (r *RedisClusterReconciler) GetRedisClient(ctx context.Context, ip string, 
 	return rdb
 }
 
-func (r *RedisClusterReconciler) FindRedisCluster(ctx context.Context, ns types.NamespacedName) (error, *v1alpha1.RedisCluster) {
-	redisCluster := &v1alpha1.RedisCluster{}
-	err := r.Client.Get(ctx, ns, redisCluster)
-	return err, redisCluster
-}
-
 func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName string) []v1alpha1.RedisNode {
 	allPods := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(
@@ -148,4 +148,8 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName 
 	}
 
 	return readyNodes
+}
+
+func (r *RedisClusterReconciler) ReapplyConfiguration() {
+
 }

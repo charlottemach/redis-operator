@@ -23,6 +23,7 @@ import (
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 
 	"context"
+	"reflect"
 
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -50,6 +51,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
+type InternalResource struct {
+	UpdateNeeded    bool
+	ObjectType      reflect.Type
+	ResourceVersion string
+}
+
+type RedisClusterName string
+type ObjectGVKName string
+
 // RedisClusterReconciler reconciles a RedisCluster object
 type RedisClusterReconciler struct {
 	client.Client
@@ -57,6 +67,11 @@ type RedisClusterReconciler struct {
 	Scheme     *runtime.Scheme
 	Recorder   record.EventRecorder
 	Finalizers []finalizer.Finalizer
+	Resources  map[RedisClusterName]map[ObjectGVKName]*InternalResource
+}
+
+func (r *RedisClusterReconciler) GetObjectKey(o client.Object) ObjectGVKName {
+	return ObjectGVKName(o.GetObjectKind().GroupVersionKind().String() + "/" + o.GetNamespace() + "/" + o.GetName())
 }
 
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters,verbs=get;list;watch;create;update;patch;delete
@@ -65,14 +80,44 @@ type RedisClusterReconciler struct {
 //+kubebuilder:rbac:groups=apps/v1,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
+func (r *RedisClusterReconciler) UpdateInternalObjectReference(o client.Object, rcn string) {
+	if r.Resources == nil {
+		r.Resources = make(map[RedisClusterName]map[ObjectGVKName]*InternalResource)
+	}
+	if r.Resources[RedisClusterName(rcn)] == nil {
+		r.Resources[RedisClusterName(rcn)] = make(map[ObjectGVKName]*InternalResource)
+	}
+	r.Log.Info("UpdateInternalObjectReference", "object", r.GetObjectKey(o))
+	internalObject := r.Resources[RedisClusterName(rcn)][r.GetObjectKey(o)]
+
+	if internalObject == nil {
+		r.Log.Info("UpdateInternalObjectReference - object did not exist. Create internal ref", "type", reflect.TypeOf(o))
+		r.Resources[RedisClusterName(rcn)][r.GetObjectKey(o)] = &InternalResource{
+			ResourceVersion: o.GetResourceVersion(),
+			UpdateNeeded:    false,
+			ObjectType:      reflect.TypeOf(o),
+		}
+		return
+	}
+
+	if internalObject.ResourceVersion != o.GetResourceVersion() {
+		r.Log.Info("UpdateInternalObjectReference - versions don't match. Marking update.")
+		internalObject.ResourceVersion = o.GetResourceVersion()
+		internalObject.UpdateNeeded = true
+	}
+}
+
 func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
 	r.Log.Info("RedisCluster reconciler called", "name", req.Name, "ns", req.Namespace)
 
 	redisCluster := &v1alpha1.RedisCluster{}
+
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
 
 	if err == nil {
+		//r.Log.Info("rc", "rc", redisCluster.GroupVersionKind().String()
+		r.UpdateInternalObjectReference(redisCluster, redisCluster.GetName())
 		return r.ReconcileClusterObject(ctx, req, redisCluster)
 	}
 
@@ -117,5 +162,25 @@ func (r *RedisClusterReconciler) PreFilter() predicate.Predicate {
 			}
 			return true
 		},
+	}
+}
+
+func (r *RedisClusterReconciler) RefreshResources(rcn string) {
+	for _, o := range r.Resources[RedisClusterName(rcn)] {
+		r.Log.Info("RefreshResources", "?", o.ObjectType.String())
+		if o.UpdateNeeded {
+			switch o.ObjectType {
+			case reflect.TypeOf(&corev1.ConfigMap{}):
+				r.Log.Info("RefreshResources", "configmap", o)
+				break
+			case reflect.TypeOf(&v1alpha1.RedisCluster{}):
+				r.Log.Info("RefreshResources", "rediscluster", o)
+				break
+			case reflect.TypeOf(&v1.StatefulSet{}):
+				r.Log.Info("RefreshResources", "statefulset", o)
+				break
+			}
+			o.UpdateNeeded = false
+		}
 	}
 }
