@@ -15,6 +15,7 @@ import (
 
 	//"golang.org/x/tools/godoc/redirect"
 
+	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
 	// "k8s.io/apiextensions-apiserver/pkg/client/clientset"
@@ -30,17 +31,9 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-func (r *RedisClusterReconciler) FindRedisCluster(ctx context.Context, ns types.NamespacedName) (*v1alpha1.RedisCluster, error) {
-	redisCluster := &v1alpha1.RedisCluster{}
-	err := r.Client.Get(ctx, ns, redisCluster)
-	return redisCluster, err
-}
-
 func (r *RedisClusterReconciler) ReconcilePod(ctx context.Context, req ctrl.Request, pod *corev1.Pod) (ctrl.Result, error) {
-	redisCluster, cluster_find_error := r.FindRedisCluster(ctx, types.NamespacedName{
-		Name:      pod.GetLabels()["rediscluster"],
-		Namespace: req.Namespace,
-	})
+	redisCluster := &v1alpha1.RedisCluster{}
+	cluster_find_error := r.FindInternalResource(ctx, pod, redisCluster)
 	if cluster_find_error != nil {
 		return ctrl.Result{}, cluster_find_error
 	}
@@ -74,15 +67,13 @@ func (r *RedisClusterReconciler) ReconcilePod(ctx context.Context, req ctrl.Requ
 		r.AssignSlots(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
 	}
-	r.RefreshResources(redisCluster.Name)
+	r.RefreshResources(redisCluster)
 	return ctrl.Result{}, nil
 }
 
 func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
-
 	labels := o.GetLabels()
-
-	if _, found := labels["rediscluster"]; found {
+	if _, found := labels[redis.RedisClusterLabel]; found {
 		return true
 	}
 	return false
@@ -128,8 +119,8 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName 
 	allPods := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(
 		map[string]string{
-			"rediscluster": clusterName,
-			"app":          "redis",
+			redis.RedisClusterLabel: clusterName,
+			"app":                   "redis",
 		},
 	)
 
@@ -150,6 +141,43 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName 
 	return readyNodes
 }
 
-func (r *RedisClusterReconciler) ReapplyConfiguration() {
+func (r *RedisClusterReconciler) ReapplyConfiguration(o client.Object) error {
+	into := &v1.StatefulSet{}
+	err := r.FindInternalResource(context.TODO(), o, into)
+	if err != nil {
+		return err
+	}
+	redisCluster := &v1alpha1.RedisCluster{}
+	err = r.FindInternalResource(context.TODO(), o, redisCluster)
+	if err != nil {
+		return err
+	}
+	readyNodes := r.GetReadyNodes(context.TODO(), redisCluster.ClusterName)
+	secret, _ := r.GetRedisSecret(o)
+	i := 0
+	for _, node := range readyNodes {
+		rdb := r.GetRedisClient(context.TODO(), node.IP, secret)
+		r.Log.Info("Running redis node shutdown", "node", node)
+		rdb.Shutdown(context.TODO())
+		r.Log.Info("Restarting Redis nodes", "pods", readyNodes)
+		i++
+	}
 
+	r.Recorder.Event(redisCluster, "Normal", "Configuration", "Configuration re-apply.")
+	return nil
+}
+
+func (r *RedisClusterReconciler) GetRedisSecret(o client.Object) (string, error) {
+	redisCluster := &v1alpha1.RedisCluster{}
+	err := r.FindInternalResource(context.TODO(), o, redisCluster)
+	if err != nil {
+		return "", err
+	}
+	secret := &corev1.Secret{}
+	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: redisCluster.Spec.Auth.SecretName, Namespace: o.GetNamespace()}, secret)
+	if err != nil {
+		return "", err
+	}
+	redisSecret := string(secret.Data["requirepass"])
+	return redisSecret, nil
 }

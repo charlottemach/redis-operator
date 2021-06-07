@@ -165,22 +165,25 @@ func (r *RedisClusterReconciler) PreFilter() predicate.Predicate {
 	}
 }
 
-func (r *RedisClusterReconciler) RefreshResources(rcn string) {
-	for _, o := range r.Resources[RedisClusterName(rcn)] {
-		r.Log.Info("RefreshResources", "?", o.ObjectType.String())
-		if o.UpdateNeeded {
-			switch o.ObjectType {
+func (r *RedisClusterReconciler) RefreshResources(o client.Object) {
+	redisClusterName := r.GetRedisClusterName(o)
+	r.Log.Info("Redis cluster name found.", "name", redisClusterName)
+	for _, v := range r.Resources[RedisClusterName(redisClusterName)] {
+		r.Log.Info("RefreshResources", "?", v.ObjectType.String())
+		if v.UpdateNeeded {
+			switch v.ObjectType {
 			case reflect.TypeOf(&corev1.ConfigMap{}):
-				r.Log.Info("RefreshResources", "configmap", o)
+				r.Log.Info("RefreshResources", "configmap", v)
+				r.ReapplyConfiguration(o)
 				break
 			case reflect.TypeOf(&v1alpha1.RedisCluster{}):
-				r.Log.Info("RefreshResources", "rediscluster", o)
+				r.Log.Info("RefreshResources", "rediscluster", v)
 				break
 			case reflect.TypeOf(&v1.StatefulSet{}):
-				r.Log.Info("RefreshResources", "statefulset", o)
+				r.Log.Info("RefreshResources", "statefulset", v)
 				break
 			}
-			o.UpdateNeeded = false
+			v.UpdateNeeded = false
 		}
 	}
 }

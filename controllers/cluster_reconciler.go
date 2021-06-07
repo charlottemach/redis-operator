@@ -18,10 +18,12 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
+
 	"k8s.io/apimachinery/pkg/types"
 
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
@@ -30,6 +32,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 )
+
+func (r *RedisClusterReconciler) GetRedisClusterName(o client.Object) string {
+	rc := &v1alpha1.RedisCluster{}
+
+	r.Log.Info("GetRedisClusterName", "o.Kind", o.GetObjectKind().GroupVersionKind().Kind)
+	if o.GetObjectKind().GroupVersionKind().Kind == "RedisCluster" {
+		return o.GetName()
+	}
+	return o.GetLabels()[redis.RedisClusterLabel]
+}
 
 func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req ctrl.Request, redisCluster *v1alpha1.RedisCluster) (ctrl.Result, error) {
 	var auth = &corev1.Secret{}
@@ -128,17 +140,8 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	r.UpdateInternalObjectReference(config_map, redisCluster.GetName())
 	r.UpdateInternalObjectReference(stateful_set, redisCluster.GetName())
 	r.UpdateInternalObjectReference(service, redisCluster.GetName())
-	r.RefreshResources(redisCluster.GetName())
+	r.RefreshResources(client.Object(redisCluster))
 	return ctrl.Result{}, nil
-}
-
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
 }
 
 func (r *RedisClusterReconciler) FindExistingStatefulSet(ctx context.Context, req ctrl.Request) (error, *v1.StatefulSet) {
@@ -171,7 +174,7 @@ func (r *RedisClusterReconciler) FindExistingService(ctx context.Context, req ct
 func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, spec v1alpha1.RedisClusterSpec, secret *corev1.Secret, labels map[string]string) *corev1.ConfigMap {
 	config := spec.Config
 	configStringMap := redis.ConfigStringToMap(config)
-	labels["rediscluster"] = req.Name
+	labels[redis.RedisClusterLabel] = req.Name
 	if val, exists := secret.Data["requirepass"]; exists {
 		configStringMap["requirepass"] = string(val)
 	} else if secret.Name != "" {
@@ -204,7 +207,7 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 		Spec: v1.DeploymentSpec{
 			Template: *rediscluster.Spec.Monitoring,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"rediscluster": req.Name, "app": "monitoring"},
+				MatchLabels: map[string]string{redis.RedisClusterLabel: req.Name, "app": "monitoring"},
 			},
 			Replicas: pointer.Int32Ptr(1),
 		},
@@ -214,7 +217,7 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 	} else {
 		d.Spec.Template.Labels = labels
 	}
-	d.Spec.Template.Labels["rediscluster"] = req.Name
+	d.Spec.Template.Labels[redis.RedisClusterLabel] = req.Name
 	d.Spec.Template.Labels["app"] = "monitoring"
 	for k, v := range rediscluster.Spec.Monitoring.Labels {
 		d.Spec.Template.Labels[k] = v
@@ -268,4 +271,28 @@ func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.Namespa
 	return err, secret
 }
 
-func (r *RedisClusterReconciler) RefreshConfigMap() {}
+func (r *RedisClusterReconciler) RefreshConfigMap() {
+
+}
+
+/*
+   FindInternalResource uses any client.Object instance to try to find a Redis cluster that it belongs to.
+   It could StatefulSet, ConfigMap, Service, etc.
+*/
+func (r *RedisClusterReconciler) FindInternalResource(ctx context.Context, o client.Object, into client.Object) error {
+	ns := types.NamespacedName{
+		Name:      r.GetRedisClusterName(o),
+		Namespace: o.GetNamespace(),
+	}
+	err := r.Client.Get(ctx, ns, into)
+	return err
+}
+
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
