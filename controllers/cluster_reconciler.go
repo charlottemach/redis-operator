@@ -34,8 +34,6 @@ import (
 )
 
 func (r *RedisClusterReconciler) GetRedisClusterName(o client.Object) string {
-	rc := &v1alpha1.RedisCluster{}
-
 	r.Log.Info("GetRedisClusterName", "o.Kind", o.GetObjectKind().GroupVersionKind().Kind)
 	if o.GetObjectKind().GroupVersionKind().Kind == "RedisCluster" {
 		return o.GetName()
