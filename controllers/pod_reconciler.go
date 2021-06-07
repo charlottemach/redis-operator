@@ -145,11 +145,13 @@ func (r *RedisClusterReconciler) ReapplyConfiguration(o client.Object) error {
 	into := &v1.StatefulSet{}
 	err := r.FindInternalResource(context.TODO(), o, into)
 	if err != nil {
+		r.Log.Error(err, "Can't find internal resource - StatefulSet")
 		return err
 	}
 	redisCluster := &v1alpha1.RedisCluster{}
 	err = r.FindInternalResource(context.TODO(), o, redisCluster)
 	if err != nil {
+		r.Log.Error(err, "Can't find internal resource - RedisCluster")
 		return err
 	}
 	readyNodes := r.GetReadyNodes(context.TODO(), redisCluster.ClusterName)
