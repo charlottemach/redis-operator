@@ -67,7 +67,6 @@ func (r *RedisClusterReconciler) ReconcilePod(ctx context.Context, req ctrl.Requ
 		r.AssignSlots(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
 	}
-	r.RefreshResources(redisCluster)
 	return ctrl.Result{}, nil
 }
 
@@ -156,6 +155,7 @@ func (r *RedisClusterReconciler) ReapplyConfiguration(o client.Object) error {
 	}
 	readyNodes := r.GetReadyNodes(context.TODO(), redisCluster.ClusterName)
 	secret, _ := r.GetRedisSecret(o)
+	r.Log.Info("Secret and ready nodes", "readyNodes", readyNodes)
 	i := 0
 	for _, node := range readyNodes {
 		rdb := r.GetRedisClient(context.TODO(), node.IP, secret)
