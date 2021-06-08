@@ -79,7 +79,7 @@ func (r *RedisClusterReconciler) ReconcilePodz(o client.Object) error {
 		return cluster_find_error
 	}
 	redisSecret, err := r.GetRedisSecret(o)
-	if err != nil {
+	if client.IgnoreNotFound(err) != nil {
 		return err
 	}
 	readyNodes := r.GetReadyNodes(context.TODO(), redisCluster.GetName())
@@ -111,6 +111,7 @@ func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
 }
 
 func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes []v1alpha1.RedisNode, secret string) {
+	r.Log.Info("ClusterMeet", "nodes", nodes)
 	if len(nodes) == 0 {
 		return
 	}
@@ -127,6 +128,7 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes []v1alph
 
 func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes []v1alpha1.RedisNode, secret string) {
 	// when all nodes are formed in a cluster, addslots
+	r.Log.Info("ClusterMeet", "nodes", nodes)
 	slots := redis.SplitNodeSlots(len(nodes))
 	i := 0
 	for _, node := range nodes {

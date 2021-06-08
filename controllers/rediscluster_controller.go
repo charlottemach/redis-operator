@@ -115,7 +115,6 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	if err == nil {
 		//r.Log.Info("rc", "rc", redisCluster.GroupVersionKind().String()
-		r.ReconcilePodz(redisCluster)
 		r.UpdateInternalObjectReference(redisCluster, redisCluster.GetName())
 		return r.ReconcileClusterObject(ctx, req, redisCluster)
 	}
@@ -159,6 +158,7 @@ func (r *RedisClusterReconciler) PreFilter() predicate.Predicate {
 func (r *RedisClusterReconciler) RefreshResources(o client.Object) {
 	redisClusterName := r.GetRedisClusterName(o)
 	r.Log.Info("Redis cluster name found.", "name", redisClusterName)
+	var err error
 	for _, v := range r.Resources[RedisClusterName(redisClusterName)] {
 		r.Log.Info("RefreshResources", "?", v.ObjectType.String())
 		if v.UpdateNeeded {
@@ -172,7 +172,11 @@ func (r *RedisClusterReconciler) RefreshResources(o client.Object) {
 				break
 			case reflect.TypeOf(&v1.StatefulSet{}):
 				r.Log.Info("RefreshResources", "statefulset", v)
+				err = r.ReconcilePodz(o)
 				break
+			}
+			if err != nil {
+				r.Log.Error(err, "Error while running refresh", "o", o)
 			}
 			v.UpdateNeeded = false
 		}
