@@ -82,9 +82,6 @@ func (r *RedisClusterReconciler) ReconcilePodz(o client.Object) error {
 	if err != nil {
 		return err
 	}
-	if redisCluster == nil {
-		r.Log.Error(cluster_find_error, "redisCluster unavailable")
-	}
 	readyNodes := r.GetReadyNodes(context.TODO(), redisCluster.GetName())
 	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
 		redisCluster.Status.Nodes = readyNodes
