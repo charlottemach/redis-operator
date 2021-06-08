@@ -170,7 +170,7 @@ func (r *RedisClusterReconciler) ReapplyConfiguration(o client.Object) error {
 }
 
 func (r *RedisClusterReconciler) GetRedisSecret(o client.Object) (string, error) {
-	r.Log.Info("GetRedisSecret", o, r.GetObjectKey(o))
+	r.Log.Info("GetRedisSecret", "o", r.GetObjectKey(o))
 	redisCluster := &v1alpha1.RedisCluster{}
 	err := r.FindInternalResource(context.TODO(), o, redisCluster)
 	if err != nil {
