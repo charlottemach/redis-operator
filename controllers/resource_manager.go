@@ -31,11 +31,11 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-func (r *RedisClusterReconciler) ConfigureRedisCluster(o client.Object) error {
+func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, o client.Object) error {
 	r.Log.Info("ConfigureRedisCluster", "o", r.GetObjectKey(o))
 	var err error
 	redisCluster := &v1alpha1.RedisCluster{}
-	cluster_find_error := r.FindInternalResource(context.TODO(), o, redisCluster)
+	cluster_find_error := r.FindInternalResource(ctx, o, redisCluster)
 	if cluster_find_error != nil {
 		return cluster_find_error
 	}
@@ -43,21 +43,21 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(o client.Object) error {
 	if client.IgnoreNotFound(err) != nil {
 		return err
 	}
-	readyNodes := r.GetReadyNodes(context.TODO(), redisCluster.GetName())
+	readyNodes := r.GetReadyNodes(ctx, redisCluster.GetName())
 	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
 		redisCluster.Status.Nodes = readyNodes
-		err = r.Status().Update(context.TODO(), redisCluster)
+		err = r.Status().Update(ctx, redisCluster)
 		if err != nil {
 			r.Log.Error(err, "Failed to update rediscluster status")
 			return err
 		}
-		r.ClusterMeet(context.TODO(), readyNodes, redisSecret)
+		r.ClusterMeet(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
 	}
 	r.Log.Info("cluster", "clustersstate", redisCluster.Status)
 
 	if len(readyNodes) == int(redisCluster.Spec.Replicas) {
-		r.AssignSlots(context.TODO(), readyNodes, redisSecret)
+		r.AssignSlots(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
 	}
 	return nil
@@ -135,27 +135,27 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName 
 	return readyNodes
 }
 
-func (r *RedisClusterReconciler) ReapplyConfiguration(o client.Object) error {
+func (r *RedisClusterReconciler) ReapplyConfiguration(ctx context.Context, o client.Object) error {
 	into := &v1.StatefulSet{}
-	err := r.FindInternalResource(context.TODO(), o, into)
+	err := r.FindInternalResource(ctx, o, into)
 	if err != nil {
 		r.Log.Error(err, "Can't find internal resource - StatefulSet")
 		return err
 	}
 	redisCluster := &v1alpha1.RedisCluster{}
-	err = r.FindInternalResource(context.TODO(), o, redisCluster)
+	err = r.FindInternalResource(ctx, o, redisCluster)
 	if err != nil {
 		r.Log.Error(err, "Can't find internal resource - RedisCluster")
 		return err
 	}
-	readyNodes := r.GetReadyNodes(context.TODO(), redisCluster.GetName())
+	readyNodes := r.GetReadyNodes(ctx, redisCluster.GetName())
 	secret, _ := r.GetRedisSecret(o)
 	r.Log.Info("Secret and ready nodes", "readyNodes", readyNodes)
 	i := 0
 	for _, node := range readyNodes {
-		rdb := r.GetRedisClient(context.TODO(), node.IP, secret)
+		rdb := r.GetRedisClient(ctx, node.IP, secret)
 		r.Log.Info("Running redis node shutdown", "node", node)
-		rdb.Shutdown(context.TODO())
+		rdb.Shutdown(ctx)
 		r.Log.Info("Restarting Redis nodes", "pods", readyNodes)
 		i++
 	}

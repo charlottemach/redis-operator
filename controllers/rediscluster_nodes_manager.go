@@ -155,7 +155,7 @@ func (r *RedisClusterReconciler) PreFilter() predicate.Predicate {
 	}
 }
 
-func (r *RedisClusterReconciler) RefreshResources(o client.Object) {
+func (r *RedisClusterReconciler) RefreshResources(ctx context.Context, o client.Object) {
 	redisClusterName := r.GetRedisClusterName(o)
 	r.Log.Info("Redis cluster name found.", "name", redisClusterName)
 	var err error
@@ -165,14 +165,14 @@ func (r *RedisClusterReconciler) RefreshResources(o client.Object) {
 			switch v.ObjectType {
 			case reflect.TypeOf(&corev1.ConfigMap{}):
 				r.Log.Info("RefreshResources", "configmap", v)
-				err = r.ReapplyConfiguration(o)
+				err = r.ReapplyConfiguration(ctx, o)
 				break
 			case reflect.TypeOf(&v1alpha1.RedisCluster{}):
 				r.Log.Info("RefreshResources", "rediscluster", v)
 				break
 			case reflect.TypeOf(&v1.StatefulSet{}):
 				r.Log.Info("RefreshResources", "statefulset", v)
-				err = r.ConfigureRedisCluster(o)
+				err = r.ConfigureRedisCluster(ctx, o)
 				break
 			}
 			if err != nil {

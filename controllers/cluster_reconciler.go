@@ -138,7 +138,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	r.UpdateInternalObjectReference(config_map, redisCluster.GetName())
 	r.UpdateInternalObjectReference(stateful_set, redisCluster.GetName())
 	r.UpdateInternalObjectReference(service, redisCluster.GetName())
-	r.RefreshResources(client.Object(redisCluster))
+	r.RefreshResources(ctx, client.Object(redisCluster))
 	return ctrl.Result{}, nil
 }
 
