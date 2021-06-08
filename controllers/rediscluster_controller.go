@@ -115,6 +115,7 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	if err == nil {
 		//r.Log.Info("rc", "rc", redisCluster.GroupVersionKind().String()
+		r.ReconcilePodz(redisCluster)
 		r.UpdateInternalObjectReference(redisCluster, redisCluster.GetName())
 		return r.ReconcileClusterObject(ctx, req, redisCluster)
 	}
@@ -171,7 +172,6 @@ func (r *RedisClusterReconciler) RefreshResources(o client.Object) {
 				break
 			case reflect.TypeOf(&v1.StatefulSet{}):
 				r.Log.Info("RefreshResources", "statefulset", v)
-				r.ReconcilePodz(o)
 				break
 			}
 			v.UpdateNeeded = false
