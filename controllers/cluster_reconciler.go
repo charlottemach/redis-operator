@@ -269,10 +269,6 @@ func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.Namespa
 	return err, secret
 }
 
-func (r *RedisClusterReconciler) RefreshConfigMap() {
-
-}
-
 /*
    FindInternalResource uses any client.Object instance to try to find a Redis cluster that it belongs to.
    It could StatefulSet, ConfigMap, Service, etc.

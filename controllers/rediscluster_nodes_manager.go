@@ -165,7 +165,7 @@ func (r *RedisClusterReconciler) RefreshResources(o client.Object) {
 			switch v.ObjectType {
 			case reflect.TypeOf(&corev1.ConfigMap{}):
 				r.Log.Info("RefreshResources", "configmap", v)
-				r.ReapplyConfiguration(o)
+				err = r.ReapplyConfiguration(o)
 				break
 			case reflect.TypeOf(&v1alpha1.RedisCluster{}):
 				r.Log.Info("RefreshResources", "rediscluster", v)
@@ -176,7 +176,7 @@ func (r *RedisClusterReconciler) RefreshResources(o client.Object) {
 				break
 			}
 			if err != nil {
-				r.Log.Error(err, "Error while running refresh", "o", o)
+				r.Log.Error(err, "Error while running refresh", "o", r.GetObjectKey(o))
 			}
 			v.UpdateNeeded = false
 		}
