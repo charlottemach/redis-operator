@@ -160,7 +160,7 @@ func (r *RedisClusterReconciler) ReapplyConfiguration(o client.Object) error {
 		i++
 	}
 
-	//r.Recorder.Event(redisCluster, "Normal", "Configuration", "Configuration re-apply.")
+	r.Recorder.Event(redisCluster, "Normal", "Configuration", "Configuration re-apply.")
 	return nil
 }
 
