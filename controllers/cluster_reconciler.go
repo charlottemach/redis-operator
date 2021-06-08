@@ -278,7 +278,7 @@ func (r *RedisClusterReconciler) RefreshConfigMap() {
    It could StatefulSet, ConfigMap, Service, etc.
 */
 func (r *RedisClusterReconciler) FindInternalResource(ctx context.Context, o client.Object, into client.Object) error {
-	r.Log.Info("FindInternalResource", "o", o.GetName()+o.GetNamespace())
+	r.Log.Info("FindInternalResource", "o", r.GetObjectKey(o))
 	ns := types.NamespacedName{
 		Name:      r.GetRedisClusterName(o),
 		Namespace: o.GetNamespace(),
