@@ -153,7 +153,7 @@ func (r *RedisClusterReconciler) ReapplyConfiguration(o client.Object) error {
 		r.Log.Error(err, "Can't find internal resource - RedisCluster")
 		return err
 	}
-	readyNodes := r.GetReadyNodes(context.TODO(), redisCluster.ClusterName)
+	readyNodes := r.GetReadyNodes(context.TODO(), redisCluster.GetName())
 	secret, _ := r.GetRedisSecret(o)
 	r.Log.Info("Secret and ready nodes", "readyNodes", readyNodes)
 	i := 0
