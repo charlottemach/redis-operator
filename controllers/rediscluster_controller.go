@@ -110,9 +110,7 @@ func (r *RedisClusterReconciler) UpdateInternalObjectReference(o client.Object, 
 func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
 	r.Log.Info("RedisCluster reconciler called", "name", req.Name, "ns", req.Namespace)
-
 	redisCluster := &v1alpha1.RedisCluster{}
-
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
 
 	if err == nil {
@@ -120,14 +118,6 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		r.UpdateInternalObjectReference(redisCluster, redisCluster.GetName())
 		return r.ReconcileClusterObject(ctx, req, redisCluster)
 	}
-
-	pod := &corev1.Pod{}
-	err = r.Client.Get(ctx, req.NamespacedName, pod)
-
-	if err == nil {
-		return r.ReconcilePod(ctx, req, pod)
-	}
-
 	return ctrl.Result{}, client.IgnoreNotFound(err)
 
 }
@@ -136,7 +126,7 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 func (r *RedisClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v1alpha1.RedisCluster{}).
-		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(r.PreFilter())).
+		//		Watches(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(r.PreFilter())).
 		Watches(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(r.PreFilter())).
 		Owns(&v1.StatefulSet{}).
 		Complete(r)
@@ -181,6 +171,7 @@ func (r *RedisClusterReconciler) RefreshResources(o client.Object) {
 				break
 			case reflect.TypeOf(&v1.StatefulSet{}):
 				r.Log.Info("RefreshResources", "statefulset", v)
+				r.ReconcilePodz(o)
 				break
 			}
 			v.UpdateNeeded = false

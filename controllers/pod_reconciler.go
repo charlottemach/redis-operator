@@ -70,6 +70,38 @@ func (r *RedisClusterReconciler) ReconcilePod(ctx context.Context, req ctrl.Requ
 	return ctrl.Result{}, nil
 }
 
+func (r *RedisClusterReconciler) ReconcilePodz(o client.Object) error {
+	r.Log.Info("ReconcilePodz", "o", r.GetObjectKey(o))
+	var err error
+	redisCluster := &v1alpha1.RedisCluster{}
+	cluster_find_error := r.FindInternalResource(context.TODO(), o, redisCluster)
+	if cluster_find_error != nil {
+		return cluster_find_error
+	}
+	redisSecret, err := r.GetRedisSecret(o)
+	if err != nil {
+		return err
+	}
+	readyNodes := r.GetReadyNodes(context.TODO(), redisCluster.GetName())
+	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
+		redisCluster.Status.Nodes = readyNodes
+		err = r.Status().Update(context.TODO(), redisCluster)
+		if err != nil {
+			r.Log.Error(err, "Failed to update rediscluster status")
+			return err
+		}
+		r.ClusterMeet(context.TODO(), readyNodes, redisSecret)
+		r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
+	}
+	r.Log.Info("cluster", "clustersstate", redisCluster.Status)
+
+	if len(readyNodes) == int(redisCluster.Spec.Replicas) {
+		r.AssignSlots(context.TODO(), readyNodes, redisSecret)
+		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
+	}
+	return nil
+}
+
 func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
 	labels := o.GetLabels()
 	if _, found := labels[redis.RedisClusterLabel]; found {
