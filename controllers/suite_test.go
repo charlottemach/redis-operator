@@ -85,9 +85,10 @@ var _ = BeforeSuite(func() {
 	Expect(k8sClient).NotTo(BeNil())
 
 	err = (&RedisClusterReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: k8sManager.GetScheme(),
-		Log:    ctrl.Log.WithName("controllers").WithName("rediscluster"),
+		Client:   k8sManager.GetClient(),
+		Scheme:   k8sManager.GetScheme(),
+		Log:      ctrl.Log.WithName("controllers").WithName("rediscluster"),
+		Recorder: k8sManager.GetEventRecorderFor("rediscluster-controller"),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -227,6 +228,7 @@ func CreateRedisCluster() *v1alpha1.RedisCluster {
 			Name:       "rediscluster-sample",
 			Namespace:  "default",
 			Finalizers: []string{"redis.containersolutions.com/configmap-cleanup"},
+			Labels:     map[string]string{"team": "team-a"},
 		},
 		Spec: v1alpha1.RedisClusterSpec{
 			Auth:     v1alpha1.RedisAuth{},

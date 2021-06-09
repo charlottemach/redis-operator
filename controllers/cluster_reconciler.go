@@ -1,39 +1,24 @@
-/*
-Copyright 2021.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package controllers
 
 import (
+
+	//"golang.org/x/tools/godoc/redirect"
+
+	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
+
 	"context"
 	"fmt"
 	"strings"
 
-	finalizer "github.com/containersolutions/redis-operator/internal/finalizers"
-
-	"github.com/go-logr/logr"
 	//"golang.org/x/tools/godoc/redirect"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/tools/record"
 
 	// "k8s.io/apiextensions-apiserver/pkg/client/clientset"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/runtime"
+
 	"k8s.io/apimachinery/pkg/types"
 
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
@@ -48,46 +33,17 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-// RedisClusterReconciler reconciles a RedisCluster object
-type RedisClusterReconciler struct {
-	client.Client
-	Log        logr.Logger
-	Scheme     *runtime.Scheme
-	Recorder   record.EventRecorder
-	Finalizers []finalizer.Finalizer
+func (r *RedisClusterReconciler) GetRedisClusterName(o client.Object) string {
+	r.Log.Info("GetRedisClusterName", "o.Kind", o.GetObjectKind().GroupVersionKind().Kind)
+	if o.GetObjectKind().GroupVersionKind().Kind == "RedisCluster" {
+		return o.GetName()
+	}
+	return o.GetLabels()[redis.RedisClusterLabel]
 }
 
-//+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters/finalizers,verbs=update
-//+kubebuilder:rbac:groups=apps/v1,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
-
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the RedisCluster object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.2/pkg/reconcile
-
-func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
-	r.Log.Info("RedisCluster reconciler called", "name", req.Name, "ns", req.Namespace)
-
-	redisCluster := &v1alpha1.RedisCluster{}
-	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
-
-	if err != nil {
-		if errors.IsNotFound(err) {
-			r.Log.Info("The cluster has been deleted")
-		}
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-
-	}
+func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req ctrl.Request, redisCluster *v1alpha1.RedisCluster) (ctrl.Result, error) {
 	var auth = &corev1.Secret{}
+	var err error
 	if len(redisCluster.Spec.Auth.SecretName) > 0 {
 		err, auth = r.GetSecret(ctx, types.NamespacedName{
 			Name:      redisCluster.Spec.Auth.SecretName,
@@ -115,40 +71,43 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 	}
 
-	err, cmap := r.FindExistingConfigMap(ctx, req)
+	err, config_map := r.FindExistingConfigMap(ctx, req)
 
 	if err != nil {
 		if errors.IsNotFound(err) {
-			cmap = r.CreateConfigMap(req, redisCluster.Spec, auth, redisCluster.GetObjectMeta().GetLabels())
-			ctrl.SetControllerReference(redisCluster, cmap, r.Scheme)
-			r.Log.Info("Creating configmap", "configmap", cmap)
-			create_map_err := r.Client.Create(ctx, cmap)
+			config_map = r.CreateConfigMap(req, redisCluster.Spec, auth, redisCluster.GetObjectMeta().GetLabels())
+			ctrl.SetControllerReference(redisCluster, config_map, r.Scheme)
+			r.Log.Info("Creating configmap", "configmap", config_map)
+			create_map_err := r.Client.Create(ctx, config_map)
 			if create_map_err != nil {
 				r.Log.Error(create_map_err, "Error when creating configmap")
+				return ctrl.Result{}, create_map_err
 			}
 		} else {
 			r.Log.Error(err, "Getting configmap data failed")
 		}
 	}
-	err, sset := r.FindExistingStatefulSet(ctx, req)
+
+	err, stateful_set := r.FindExistingStatefulSet(ctx, req)
+	var create_sset_err error
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// create stateful set
-			sset, err := r.CreateStatefulSet(ctx, req, redisCluster.Spec, redisCluster.ObjectMeta.GetLabels(), cmap)
-			if err != nil {
+			stateful_set, create_sset_err = r.CreateStatefulSet(ctx, req, redisCluster.Spec, redisCluster.ObjectMeta.GetLabels(), config_map)
+			if create_sset_err != nil {
 				r.Log.Error(err, "Error when creating StatefulSet")
 				return ctrl.Result{}, err
 			}
-			ctrl.SetControllerReference(redisCluster, sset, r.Scheme)
-			create_err := r.Client.Create(ctx, sset)
-			if create_err != nil && errors.IsAlreadyExists(create_err) {
+			ctrl.SetControllerReference(redisCluster, stateful_set, r.Scheme)
+			create_sset_err = r.Client.Create(ctx, stateful_set)
+			if create_sset_err != nil && errors.IsAlreadyExists(create_sset_err) {
 				r.Log.Info("StatefulSet already exists")
 			}
 			if redisCluster.Spec.Monitoring != nil {
 				mdep := r.CreateMonitoringDeployment(ctx, req, redisCluster, redisCluster.ObjectMeta.GetLabels())
 				ctrl.SetControllerReference(redisCluster, mdep, r.Scheme)
 				mdep_create_err := r.Client.Create(ctx, mdep)
-				if mdep_create_err != nil && errors.IsAlreadyExists(create_err) {
+				if mdep_create_err != nil && errors.IsAlreadyExists(create_sset_err) {
 					r.Log.Info("Monitoring pod already exists")
 				} else if mdep_create_err != nil {
 					r.Log.Error(mdep_create_err, "Error creating monitoring deployment")
@@ -160,51 +119,27 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		}
 	}
-	err, _ = r.FindExistingService(ctx, req)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			svc := r.CreateService(req, redisCluster.GetObjectMeta().GetLabels())
-			ctrl.SetControllerReference(redisCluster, svc, r.Scheme)
-			create_svc_err := r.Client.Create(ctx, svc)
+	create_svc_err, service := r.FindExistingService(ctx, req)
+	if create_svc_err != nil {
+		if errors.IsNotFound(create_svc_err) {
+			service = r.CreateService(req, redisCluster.GetObjectMeta().GetLabels())
+			ctrl.SetControllerReference(redisCluster, service, r.Scheme)
+			create_svc_err := r.Client.Create(ctx, service)
 			if create_svc_err != nil && errors.IsAlreadyExists(create_svc_err) {
 				r.Log.Info("Svc already exists")
 			} else if create_svc_err != nil {
-				r.Log.Error(err, "Creating service failed")
+				return ctrl.Result{}, create_svc_err
 			}
 		} else {
 			r.Log.Error(err, "Getting svc data failed")
 
 		}
 	}
-	if sset != nil && sset.Spec.Replicas != &(redisCluster.Spec.Replicas) {
-		// fix replicas
-		// return
-	}
-
-	// Instance are set up and replica count is sufficient
-
-	// check that all instances aware of each other
-
+	r.UpdateInternalObjectReference(config_map, redisCluster.GetName())
+	r.UpdateInternalObjectReference(stateful_set, redisCluster.GetName())
+	r.UpdateInternalObjectReference(service, redisCluster.GetName())
+	r.RefreshResources(ctx, client.Object(redisCluster))
 	return ctrl.Result{}, nil
-
-}
-
-func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.NamespacedName) (error, *corev1.Secret) {
-	secret := &corev1.Secret{}
-	err := r.Client.Get(ctx, ns, secret)
-	if err != nil {
-		r.Log.Error(err, "Getting secret failed", "secret", ns)
-	}
-	return err, secret
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *RedisClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&v1alpha1.RedisCluster{}).
-		Owns(&v1.StatefulSet{}).
-		Owns(&corev1.ConfigMap{}).
-		Complete(r)
 }
 
 func (r *RedisClusterReconciler) FindExistingStatefulSet(ctx context.Context, req ctrl.Request) (error, *v1.StatefulSet) {
@@ -237,7 +172,7 @@ func (r *RedisClusterReconciler) FindExistingService(ctx context.Context, req ct
 func (r *RedisClusterReconciler) CreateConfigMap(req ctrl.Request, spec v1alpha1.RedisClusterSpec, secret *corev1.Secret, labels map[string]string) *corev1.ConfigMap {
 	config := spec.Config
 	configStringMap := redis.ConfigStringToMap(config)
-
+	labels[redis.RedisClusterLabel] = req.Name
 	if val, exists := secret.Data["requirepass"]; exists {
 		configStringMap["requirepass"] = string(val)
 	} else if secret.Name != "" {
@@ -270,7 +205,7 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 		Spec: v1.DeploymentSpec{
 			Template: *rediscluster.Spec.Monitoring,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"rediscluster": req.Name, "app": "monitoring"},
+				MatchLabels: map[string]string{redis.RedisClusterLabel: req.Name, "app": "monitoring"},
 			},
 			Replicas: pointer.Int32Ptr(1),
 		},
@@ -280,7 +215,7 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 	} else {
 		d.Spec.Template.Labels = labels
 	}
-	d.Spec.Template.Labels["rediscluster"] = req.Name
+	d.Spec.Template.Labels[redis.RedisClusterLabel] = req.Name
 	d.Spec.Template.Labels["app"] = "monitoring"
 	for k, v := range rediscluster.Spec.Monitoring.Labels {
 		d.Spec.Template.Labels[k] = v
@@ -325,7 +260,29 @@ func (r *RedisClusterReconciler) CreateService(req ctrl.Request, labels map[stri
 	return redis.CreateService(req.Namespace, req.Name, labels)
 }
 
-// Helper functions to check and remove string from a slice of strings.
+func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.NamespacedName) (error, *corev1.Secret) {
+	secret := &corev1.Secret{}
+	err := r.Client.Get(ctx, ns, secret)
+	if err != nil {
+		r.Log.Error(err, "Getting secret failed", "secret", ns)
+	}
+	return err, secret
+}
+
+/*
+   FindInternalResource uses any client.Object instance to try to find a Redis cluster that it belongs to.
+   It could StatefulSet, ConfigMap, Service, etc.
+*/
+func (r *RedisClusterReconciler) FindInternalResource(ctx context.Context, o client.Object, into client.Object) error {
+	r.Log.Info("FindInternalResource", "o", r.GetObjectKey(o))
+	ns := types.NamespacedName{
+		Name:      r.GetRedisClusterName(o),
+		Namespace: o.GetNamespace(),
+	}
+	err := r.Client.Get(ctx, ns, into)
+	return err
+}
+
 func containsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {
