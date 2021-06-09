@@ -41,8 +41,8 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, o cl
 		return cluster_find_error
 	}
 	redisSecret, err := r.GetRedisSecret(o)
-	if client.IgnoreNotFound(err) != nil {
-		r.Log.Info("ConfigureRedisCluster - Cluster not found", "name", redisCluster.GetName())
+	if err != nil {
+		r.Log.Info("ConfigureRedisCluster - secret not found", "name", redisCluster.GetName())
 		return err
 	}
 	readyNodes := r.GetReadyNodes(ctx, redisCluster.GetName())
@@ -173,6 +173,12 @@ func (r *RedisClusterReconciler) GetRedisSecret(o client.Object) (string, error)
 	if err != nil {
 		return "", err
 	}
+
+	if redisCluster.Spec.Auth.SecretName == "" {
+		r.Log.Info("GetRedisSecret - no secret name is set in the cluster, exiting")
+		return "", nil
+	}
+
 	secret := &corev1.Secret{}
 	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: redisCluster.Spec.Auth.SecretName, Namespace: o.GetNamespace()}, secret)
 	if err != nil {
