@@ -114,9 +114,13 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
 
 	if err == nil {
-		//r.Log.Info("rc", "rc", redisCluster.GroupVersionKind().String()
+		r.Log.Info("Found RedisCluster", "name", redisCluster.GetName(), "GVK", redisCluster.GroupVersionKind().String())
 		r.UpdateInternalObjectReference(redisCluster, redisCluster.GetName())
 		return r.ReconcileClusterObject(ctx, req, redisCluster)
+	} else {
+		// cluster deleted
+		r.Log.Info("Can't find RedisCluster, nullifying the existing internal map")
+		r.Resources[RedisClusterName(req.Name)] = nil
 	}
 	return ctrl.Result{}, client.IgnoreNotFound(err)
 
