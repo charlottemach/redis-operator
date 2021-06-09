@@ -37,12 +37,12 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, o cl
 	redisCluster := &v1alpha1.RedisCluster{}
 	cluster_find_error := r.FindInternalResource(ctx, o, redisCluster)
 	if cluster_find_error != nil {
-		r.Log.Info("ConfigureRedisCluster - error", "name", redisCluster.Name())
+		r.Log.Info("ConfigureRedisCluster - error", "name", redisCluster.GetName())
 		return cluster_find_error
 	}
 	redisSecret, err := r.GetRedisSecret(o)
 	if client.IgnoreNotFound(err) != nil {
-		r.Log.Info("ConfigureRedisCluster - Cluster not found", "name", redisCluster.Name())
+		r.Log.Info("ConfigureRedisCluster - Cluster not found", "name", redisCluster.GetName())
 		return err
 	}
 	readyNodes := r.GetReadyNodes(ctx, redisCluster.GetName())
