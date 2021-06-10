@@ -33,6 +33,14 @@ import (
 	"k8s.io/utils/pointer"
 )
 
+func (r *RedisClusterReconciler) GetRedisClusterName(o client.Object) string {
+	r.Log.Info("GetRedisClusterName", "o.Kind", o.GetObjectKind().GroupVersionKind().Kind)
+	if o.GetObjectKind().GroupVersionKind().Kind == "RedisCluster" {
+		return o.GetName()
+	}
+	return o.GetLabels()[redis.RedisClusterLabel]
+}
+
 func (r *RedisClusterReconciler) GetRedisClusterNsName(o client.Object) string {
 	r.Log.Info("GetRedisClusterName", "o.Kind", o.GetObjectKind().GroupVersionKind().Kind)
 	if o.GetObjectKind().GroupVersionKind().Kind == "RedisCluster" {
@@ -276,7 +284,7 @@ func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.Namespa
 func (r *RedisClusterReconciler) FindInternalResource(ctx context.Context, o client.Object, into client.Object) error {
 	r.Log.Info("FindInternalResource", "o", r.GetObjectKey(o))
 	ns := types.NamespacedName{
-		Name:      r.GetRedisClusterNsName(o),
+		Name:      r.GetRedisClusterName(o),
 		Namespace: o.GetNamespace(),
 	}
 	err := r.Client.Get(ctx, ns, into)
