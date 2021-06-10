@@ -36,9 +36,9 @@ import (
 func (r *RedisClusterReconciler) GetRedisClusterName(o client.Object) string {
 	r.Log.Info("GetRedisClusterName", "o.Kind", o.GetObjectKind().GroupVersionKind().Kind)
 	if o.GetObjectKind().GroupVersionKind().Kind == "RedisCluster" {
-		return o.GetName()
+		return o.GetNamespace() + "/" + o.GetName()
 	}
-	return o.GetLabels()[redis.RedisClusterLabel]
+	return o.GetNamespace() + "/" + o.GetLabels()[redis.RedisClusterLabel]
 }
 
 func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req ctrl.Request, redisCluster *v1alpha1.RedisCluster) (ctrl.Result, error) {
