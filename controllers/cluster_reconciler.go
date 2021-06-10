@@ -33,7 +33,7 @@ import (
 	"k8s.io/utils/pointer"
 )
 
-func (r *RedisClusterReconciler) GetRedisClusterName(o client.Object) string {
+func (r *RedisClusterReconciler) GetRedisClusterNsName(o client.Object) string {
 	r.Log.Info("GetRedisClusterName", "o.Kind", o.GetObjectKind().GroupVersionKind().Kind)
 	if o.GetObjectKind().GroupVersionKind().Kind == "RedisCluster" {
 		return o.GetNamespace() + "/" + o.GetName()
@@ -135,9 +135,9 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 		}
 	}
-	r.UpdateInternalObjectReference(config_map, redisCluster.GetName())
-	r.UpdateInternalObjectReference(stateful_set, redisCluster.GetName())
-	r.UpdateInternalObjectReference(service, redisCluster.GetName())
+	r.UpdateInternalObjectReference(config_map, r.GetRedisClusterNsName(redisCluster))
+	r.UpdateInternalObjectReference(stateful_set, r.GetRedisClusterNsName(redisCluster))
+	r.UpdateInternalObjectReference(service, r.GetRedisClusterNsName(redisCluster))
 	r.RefreshResources(ctx, client.Object(redisCluster))
 	return ctrl.Result{}, nil
 }
@@ -276,7 +276,7 @@ func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.Namespa
 func (r *RedisClusterReconciler) FindInternalResource(ctx context.Context, o client.Object, into client.Object) error {
 	r.Log.Info("FindInternalResource", "o", r.GetObjectKey(o))
 	ns := types.NamespacedName{
-		Name:      r.GetRedisClusterName(o),
+		Name:      r.GetRedisClusterNsName(o),
 		Namespace: o.GetNamespace(),
 	}
 	err := r.Client.Get(ctx, ns, into)
