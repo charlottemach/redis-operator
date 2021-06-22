@@ -114,9 +114,13 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
 
 	if err == nil {
-		//r.Log.Info("rc", "rc", redisCluster.GroupVersionKind().String()
+		r.Log.Info("Found RedisCluster", "name", redisCluster.GetName(), "GVK", redisCluster.GroupVersionKind().String())
 		r.UpdateInternalObjectReference(redisCluster, redisCluster.GetName())
 		return r.ReconcileClusterObject(ctx, req, redisCluster)
+	} else {
+		// cluster deleted
+		r.Log.Info("Can't find RedisCluster, nullifying the existing internal map")
+		r.Resources[RedisClusterName(r.GetRedisClusterNsName(redisCluster))] = nil
 	}
 	return ctrl.Result{}, client.IgnoreNotFound(err)
 
@@ -156,7 +160,7 @@ func (r *RedisClusterReconciler) PreFilter() predicate.Predicate {
 }
 
 func (r *RedisClusterReconciler) RefreshResources(ctx context.Context, o client.Object) {
-	redisClusterName := r.GetRedisClusterName(o)
+	redisClusterName := r.GetRedisClusterNsName(o)
 	r.Log.Info("Redis cluster name found.", "name", redisClusterName)
 	var err error
 	for _, v := range r.Resources[RedisClusterName(redisClusterName)] {

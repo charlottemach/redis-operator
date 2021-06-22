@@ -41,6 +41,14 @@ func (r *RedisClusterReconciler) GetRedisClusterName(o client.Object) string {
 	return o.GetLabels()[redis.RedisClusterLabel]
 }
 
+func (r *RedisClusterReconciler) GetRedisClusterNsName(o client.Object) string {
+	r.Log.Info("GetRedisClusterName", "o.Kind", o.GetObjectKind().GroupVersionKind().Kind)
+	if o.GetObjectKind().GroupVersionKind().Kind == "RedisCluster" {
+		return o.GetNamespace() + "/" + o.GetName()
+	}
+	return o.GetNamespace() + "/" + o.GetLabels()[redis.RedisClusterLabel]
+}
+
 func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req ctrl.Request, redisCluster *v1alpha1.RedisCluster) (ctrl.Result, error) {
 	var auth = &corev1.Secret{}
 	var err error
@@ -135,9 +143,9 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 		}
 	}
-	r.UpdateInternalObjectReference(config_map, redisCluster.GetName())
-	r.UpdateInternalObjectReference(stateful_set, redisCluster.GetName())
-	r.UpdateInternalObjectReference(service, redisCluster.GetName())
+	r.UpdateInternalObjectReference(config_map, r.GetRedisClusterNsName(redisCluster))
+	r.UpdateInternalObjectReference(stateful_set, r.GetRedisClusterNsName(redisCluster))
+	r.UpdateInternalObjectReference(service, r.GetRedisClusterNsName(redisCluster))
 	r.RefreshResources(ctx, client.Object(redisCluster))
 	return ctrl.Result{}, nil
 }
