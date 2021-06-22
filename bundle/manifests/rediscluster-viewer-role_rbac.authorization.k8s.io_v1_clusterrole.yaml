@@ -1,13 +1,13 @@
-# permissions for end users to view redisdatabases.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: redisdatabase-viewer-role
+  creationTimestamp: null
+  name: rediscluster-viewer-role
 rules:
 - apiGroups:
   - redis.containersolutions.com
   resources:
-  - redisdatabases
+  - redisclusters
   verbs:
   - get
   - list
@@ -15,6 +15,6 @@ rules:
 - apiGroups:
   - redis.containersolutions.com
   resources:
-  - redisdatabases/status
+  - redisclusters/status
   verbs:
   - get

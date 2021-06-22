@@ -77,8 +77,13 @@ func (r *RedisClusterReconciler) GetObjectKey(o client.Object) ObjectGVKName {
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters/finalizers,verbs=update
-//+kubebuilder:rbac:groups=apps/v1,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups="",resources=secrets,verbs=get
+//+kubebuilder:rbac:groups=apps,resources=statefulsets;deployments,verbs=get;list;watch
+//+kubebuilder:rbac:groups="",resources=configmap;services;pods,verbs=get;list;watch
+
+//+kubebuilder:rbac:groups="",resources=configmaps;services,verbs=get;list;create;delete
+//+kubebuilder:rbac:groups=apps,resources=statefulsets;deployments,verbs=create;delete;patch;update
 
 func (r *RedisClusterReconciler) UpdateInternalObjectReference(o client.Object, rcn string) {
 	if r.Resources == nil {

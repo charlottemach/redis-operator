@@ -1,0 +1,220 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "redis.containersolutions.com/v1alpha1",
+          "kind": "RedisCluster",
+          "metadata": {
+            "finalizers": [
+              "redis.containersolutions.com/rdb-backup",
+              "redis.containersolutions.com/configmap-cleanup"
+            ],
+            "labels": {
+              "app": "redis-graph",
+              "team": "team-a"
+            },
+            "name": "rediscluster-sample",
+            "namespace": "default"
+          },
+          "spec": {
+            "config": "maxmemory 2600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly yes\nprotected-mode no\nloadmodule /usr/lib/redis/modules/redisgraph.so\n",
+            "image": "redislabs/redisgraph:2.4.1",
+            "replicas": 1,
+            "storage": "3Gi"
+          }
+        }
+      ]
+    capabilities: Basic Install
+    operators.operatorframework.io/builder: operator-sdk-v1.9.0
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
+  name: redis-cluster-operator.v0.1.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: RedisCluster is the Schema for the redisclusters API
+      displayName: Redis Cluster
+      kind: RedisCluster
+      name: redisclusters.redis.containersolutions.com
+      version: v1alpha1
+  description: Redis Cluster Operator provisions and configures persistant Redis cluster
+  displayName: Redis Cluster Operator
+  icon:
+  - base64data: PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPCEtLSBHZW5lcmF0b3I6IEFkb2JlIElsbHVzdHJhdG9yIDIzLjAuMiwgU1ZHIEV4cG9ydCBQbHVnLUluIC4gU1ZHIFZlcnNpb246IDYuMDAgQnVpbGQgMCkgIC0tPgo8c3ZnIHZlcnNpb249IjEuMSIgaWQ9IkxheWVyXzEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgeG1sbnM6eGxpbms9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkveGxpbmsiIHg9IjBweCIgeT0iMHB4IgoJIHZpZXdCb3g9IjAgMCAyNi41IDI0LjUiIHN0eWxlPSJlbmFibGUtYmFja2dyb3VuZDpuZXcgMCAwIDI2LjUgMjQuNTsiIHhtbDpzcGFjZT0icHJlc2VydmUiPgo8c3R5bGUgdHlwZT0idGV4dC9jc3MiPgoJLnN0MHtmaWxsOiNEQzM4MkQ7fQoJLnN0MXtmaWxsOm5vbmU7c3Ryb2tlOiNEQzM4MkQ7c3Ryb2tlLXdpZHRoOjEuNTtzdHJva2UtbWl0ZXJsaW1pdDoxMDt9Cjwvc3R5bGU+CjxnPgoJPGc+CgkJPGc+CgkJCTxwb2x5Z29uIGNsYXNzPSJzdDAiIHBvaW50cz0iMy44LDI0LjUgMCwyNC41IDAsMCAzLjgsMCAzLjgsMS41IDEuNSwxLjUgMS41LDIzIDMuOCwyMyAJCQkiLz4KCQk8L2c+CgkJPGc+CgkJCTxwb2x5Z29uIGNsYXNzPSJzdDAiIHBvaW50cz0iMjYuNSwyNC41IDIyLjgsMjQuNSAyMi44LDIzIDI1LDIzIDI1LDEuNSAyMi44LDEuNSAyMi44LDAgMjYuNSwwIAkJCSIvPgoJCTwvZz4KCTwvZz4KCTxnPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0xOS4yLDUuMmMwLjYsMCwxLDAuNCwxLDFzLTAuNCwxLTEsMXMtMS0wLjQtMS0xUzE4LjcsNS4yLDE5LjIsNS4yIE0xOS4yLDQuMmMtMS4xLDAtMiwwLjktMiwyczAuOSwyLDIsMgoJCQlzMi0wLjksMi0yUzIwLjQsNC4yLDE5LjIsNC4yTDE5LjIsNC4yeiIvPgoJCTxwYXRoIGNsYXNzPSJzdDAiIGQ9Ik0xOS4yLDExLjJjMC42LDAsMSwwLjQsMSwxcy0wLjQsMS0xLDFzLTEtMC40LTEtMVMxOC43LDExLjIsMTkuMiwxMS4yIE0xOS4yLDEwLjJjLTEuMSwwLTIsMC45LTIsMgoJCQlzMC45LDIsMiwyczItMC45LDItMlMyMC40LDEwLjIsMTkuMiwxMC4yTDE5LjIsMTAuMnoiLz4KCQk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMTkuMiwxNy4yYzAuNiwwLDEsMC40LDEsMXMtMC40LDEtMSwxcy0xLTAuNC0xLTFTMTguNywxNy4yLDE5LjIsMTcuMiBNMTkuMiwxNi4yYy0xLjEsMC0yLDAuOS0yLDIKCQkJczAuOSwyLDIsMnMyLTAuOSwyLTJTMjAuNCwxNi4yLDE5LjIsMTYuMkwxOS4yLDE2LjJ6Ii8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTEzLjIsNS4yYzAuNiwwLDEsMC40LDEsMXMtMC40LDEtMSwxcy0xLTAuNC0xLTFTMTIuNyw1LjIsMTMuMiw1LjIgTTEzLjIsNC4yYy0xLjEsMC0yLDAuOS0yLDJzMC45LDIsMiwyCgkJCXMyLTAuOSwyLTJTMTQuNCw0LjIsMTMuMiw0LjJMMTMuMiw0LjJ6Ii8+CgkJPGNpcmNsZSBjbGFzcz0ic3QwIiBjeD0iMTMuMiIgY3k9IjEyLjIiIHI9IjIiLz4KCQk8cGF0aCBjbGFzcz0ic3QwIiBkPSJNMTMuMiwxNy4yYzAuNiwwLDEsMC40LDEsMXMtMC40LDEtMSwxcy0xLTAuNC0xLTFTMTIuNywxNy4yLDEzLjIsMTcuMiBNMTMuMiwxNi4yYy0xLjEsMC0yLDAuOS0yLDIKCQkJczAuOSwyLDIsMnMyLTAuOSwyLTJTMTQuNCwxNi4yLDEzLjIsMTYuMkwxMy4yLDE2LjJ6Ii8+CgkJPGNpcmNsZSBjbGFzcz0ic3QwIiBjeD0iNy4yIiBjeT0iNi4yIiByPSIyIi8+CgkJPHBhdGggY2xhc3M9InN0MCIgZD0iTTcuMiwxMS4yYzAuNiwwLDEsMC40LDEsMXMtMC40LDEtMSwxcy0xLTAuNC0xLTFTNi43LDExLjIsNy4yLDExLjIgTTcuMiwxMC4yYy0xLjEsMC0yLDAuOS0yLDJzMC45LDIsMiwyCgkJCXMyLTAuOSwyLTJTOC40LDEwLjIsNy4yLDEwLjJMNy4yLDEwLjJ6Ii8+CgkJPGNpcmNsZSBjbGFzcz0ic3QwIiBjeD0iNy4yIiBjeT0iMTguMiIgcj0iMiIvPgoJPC9nPgo8L2c+Cjwvc3ZnPgo=
+    mediatype: image/svg+xml
+  install:
+    spec:
+      clusterPermissions:
+      - rules:
+        - apiGroups:
+          - ""
+          resources:
+          - configmap
+          - pods
+          - services
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          - services
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          - statefulsets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - redis.containersolutions.com
+          resources:
+          - redisclusters
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - redis.containersolutions.com
+          resources:
+          - redisclusters/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - redis.containersolutions.com
+          resources:
+          - redisclusters/status
+          verbs:
+          - get
+          - patch
+          - update
+        serviceAccountName: controller-manager
+      deployments:
+      - name: controller-manager
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              control-plane: controller-manager
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                control-plane: controller-manager
+            spec:
+              containers:
+              - args:
+                - --leader-elect
+                command:
+                - /manager
+                image: ghcr.io/containersolutions/redis-operator:sha-e539c67
+                imagePullPolicy: Always
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: manager
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 500m
+                    memory: 300Mi
+                  requests:
+                    cpu: 400m
+                    memory: 200Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: controller-manager
+              terminationGracePeriodSeconds: 10
+      permissions:
+      - rules:
+        - apiGroups:
+          - ""
+          - coordination.k8s.io
+          resources:
+          - configmaps
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        serviceAccountName: controller-manager
+    strategy: deployment
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - redis
+  - persistant redis
+  - redis cluster
+  links:
+  - name: Redis Cluster Operator
+    url: https://redis-cluster-operator.domain
+  maintainers:
+  - email: aleksandr.guljajev@container-solutions.com
+    name: Aleksandr Guljajev
+  maturity: alpha
+  provider:
+    name: redis-cluster-operator
+    url: https://github.com/containersolutions/redis-operator
+  version: 0.1.0

@@ -3,8 +3,6 @@ resources:
 - bases/leader_election_role_binding.yaml
 - bases/rediscluster_editor_role.yaml
 - bases/rediscluster_viewer_role.yaml
-- bases/redisdatabase_editor_role.yaml
-- bases/redisdatabase_viewer_role.yaml
 - bases/role.yaml
 - bases/role_binding.yaml
 - bases/service_account.yaml
