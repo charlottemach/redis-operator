@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	//"golang.org/x/tools/godoc/redirect"
 	v1 "k8s.io/api/apps/v1"
@@ -149,7 +150,24 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	r.UpdateInternalObjectReference(service, r.GetRedisClusterNsName(redisCluster))
 	r.RefreshResources(ctx, client.Object(redisCluster))
 
-	return ctrl.Result{}, nil
+	r.Log.Info("Checking if cluster status can be updated to Ready")
+	// check the cluster state and slots allocated. if states is ok, we can reset the status
+	clusterInfo := r.GetClusterInfo(ctx, redisCluster)
+	r.Log.Info("Cluster info", "clusterinfo", clusterInfo)
+	state := clusterInfo["cluster_state"]
+	slots_ok := clusterInfo["cluster_slots_ok"]
+
+	if state == "ok" && slots_ok == "16384" {
+		r.Log.Info("Cluster state to Ready")
+		redisCluster.Status.Status = v1alpha1.StatusReady
+	} else {
+		r.Log.Info("Cluster state to Configuring")
+		redisCluster.Status.Status = v1alpha1.StatusConfiguring
+	}
+	redisCluster.Status.Nodes = r.GetReadyNodes(ctx, redisCluster.Name)
+	update_err := r.UpdateClusterStatus(ctx, redisCluster)
+
+	return ctrl.Result{RequeueAfter: 10 * time.Second}, update_err
 
 }
 
@@ -300,6 +318,7 @@ func (r *RedisClusterReconciler) FindInternalResource(ctx context.Context, o cli
 
 func (r *RedisClusterReconciler) GetClusterInfo(ctx context.Context, redisCluster *v1alpha1.RedisCluster) map[string]string {
 	if len(redisCluster.Status.Nodes) == 0 {
+		r.Log.Info("No ready nodes availableo on the cluster.", "clusterinfo", map[string]string{})
 		return map[string]string{}
 	}
 	node := redisCluster.Status.Nodes[0]
