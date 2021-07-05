@@ -21,6 +21,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var StatusInitializing = "Initializing"
+var StatusScalingDown = "ScalingDown"
+var StatusScalingUp = "ScalingUp"
+var StatusReady = "StatusReady"
+var StatusError = "StatusError"
+
 // RedisClusterSpec defines the desired state of RedisCluster
 type RedisClusterSpec struct {
 	Auth       RedisAuth           `json:"auth,omitempty"`
@@ -36,7 +42,8 @@ type RedisClusterSpec struct {
 type RedisClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Nodes []RedisNode `json:"nodes"`
+	Nodes  []RedisNode `json:"nodes"`
+	Status string      `json:"status"`
 }
 
 type RedisNode struct {

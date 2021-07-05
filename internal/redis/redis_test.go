@@ -196,3 +196,26 @@ maxmemory 500mb`},
 		})
 	}
 }
+
+func TestStateParser(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+		want map[string]string
+	}{
+		{"test_conf_empty", "", map[string]string{}},
+		{"test_conf_3_lines", `
+cluster_state:ok
+cluster_slots_ok:16384
+cluster_slots_pfail:0
+`, map[string]string{"cluster_state": "ok", "cluster_slots_ok": "16384", "cluster_slots_pfail": "0"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := GetClusterStateMap(tt.args); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("MapToConfigString() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

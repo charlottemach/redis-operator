@@ -48,11 +48,6 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, o cl
 	readyNodes := r.GetReadyNodes(ctx, redisCluster.GetName())
 	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
 		redisCluster.Status.Nodes = readyNodes
-		err = r.Status().Update(ctx, redisCluster)
-		if err != nil {
-			r.Log.Error(err, "Failed to update rediscluster status")
-			return err
-		}
 		r.ClusterMeet(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
 	}
@@ -61,6 +56,11 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, o cl
 	if len(readyNodes) == int(redisCluster.Spec.Replicas) {
 		r.AssignSlots(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
+	}
+	err = r.Status().Update(ctx, redisCluster)
+	if err != nil {
+		r.Log.Error(err, "Failed to update rediscluster status")
+		return err
 	}
 	return nil
 }
@@ -89,6 +89,7 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes []v1alph
 	}
 }
 
+//TODO: check how many cluster slots have been already assign, and rebalance cluster if necessary
 func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes []v1alpha1.RedisNode, secret string) {
 	// when all nodes are formed in a cluster, addslots
 	r.Log.Info("ClusterMeet", "nodes", nodes)

@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	//"golang.org/x/tools/godoc/redirect"
 	v1 "k8s.io/api/apps/v1"
@@ -100,7 +101,15 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	var create_sset_err error
 	if err != nil {
 		if errors.IsNotFound(err) {
+			// set status to Initializing
 			// create stateful set
+
+			redisCluster.Status.Status = v1alpha1.StatusInitializing
+			update_err := r.Client.Update(ctx, redisCluster)
+			if update_err != nil {
+				return ctrl.Result{}, update_err
+			}
+
 			stateful_set, create_sset_err = r.CreateStatefulSet(ctx, req, redisCluster.Spec, redisCluster.ObjectMeta.GetLabels(), config_map)
 			if create_sset_err != nil {
 				r.Log.Error(err, "Error when creating StatefulSet")
@@ -147,7 +156,13 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	r.UpdateInternalObjectReference(stateful_set, r.GetRedisClusterNsName(redisCluster))
 	r.UpdateInternalObjectReference(service, r.GetRedisClusterNsName(redisCluster))
 	r.RefreshResources(ctx, client.Object(redisCluster))
-	return ctrl.Result{}, nil
+
+	// if status is initializing, reschedule the call to check for cluster state
+	if redisCluster.Status.Status == v1alpha1.StatusInitializing {
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	} else {
+		return ctrl.Result{}, nil
+	}
 }
 
 func (r *RedisClusterReconciler) FindExistingStatefulSet(ctx context.Context, req ctrl.Request) (error, *v1.StatefulSet) {
@@ -289,6 +304,18 @@ func (r *RedisClusterReconciler) FindInternalResource(ctx context.Context, o cli
 	}
 	err := r.Client.Get(ctx, ns, into)
 	return err
+}
+
+/*
+
+ */
+
+func (r *RedisClusterReconciler) GetClusterState(ctx context.Context, redisCluster *v1alpha1.RedisCluster) string {
+	node := redisCluster.Status.Nodes[0]
+	secret, _ := r.GetRedisSecret(redisCluster)
+	rdb := r.GetRedisClient(ctx, node.IP, secret)
+	info, _ := rdb.ClusterInfo(ctx).Result()
+	return info
 }
 
 func containsString(slice []string, s string) bool {
