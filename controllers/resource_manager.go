@@ -60,6 +60,7 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, o cl
 	r.Log.Info("Checking if cluster status can be updated to Ready")
 	// check the cluster state and slots allocated. if states is ok, we can reset the status
 	clusterInfo := r.GetClusterInfo(ctx, redisCluster)
+	r.Log.Info("Cluster info", "clusterinfo", clusterInfo)
 	state := clusterInfo["cluster_state"]
 	slots_ok := clusterInfo["cluster_slots_ok"]
 
