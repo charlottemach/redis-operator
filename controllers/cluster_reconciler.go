@@ -103,13 +103,11 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		if errors.IsNotFound(err) {
 			// set status to Initializing
 			// create stateful set
-
-			redisCluster.Status.Status = v1alpha1.StatusInitializing
-			update_err := r.Client.Update(ctx, redisCluster)
+			// set status here
+			update_err := r.UpdateClusterState(ctx, redisCluster, v1alpha1.StatusInitializing)
 			if update_err != nil {
 				return ctrl.Result{}, update_err
 			}
-
 			stateful_set, create_sset_err = r.CreateStatefulSet(ctx, req, redisCluster.Spec, redisCluster.ObjectMeta.GetLabels(), config_map)
 			if create_sset_err != nil {
 				r.Log.Error(err, "Error when creating StatefulSet")
@@ -330,6 +328,12 @@ func (r *RedisClusterReconciler) GetClusterInfo(ctx context.Context, redisCluste
 	rdb := r.GetRedisClient(ctx, node.IP, secret)
 	info, _ := rdb.ClusterInfo(ctx).Result()
 	return redis.GetClusterInfo(info)
+}
+
+func (r *RedisClusterReconciler) UpdateClusterState(ctx context.Context, redisCluster *v1alpha1.RedisCluster, state string) error {
+	redisCluster.Status.Status = state
+	r.Log.Info("Updating cluster status", "status", state)
+	return r.Client.Update(ctx, redisCluster)
 }
 
 func containsString(slice []string, s string) bool {
