@@ -21,11 +21,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var StatusInitializing = "Initializing"
 var StatusScalingDown = "ScalingDown"
 var StatusScalingUp = "ScalingUp"
-var StatusReady = "StatusReady"
-var StatusError = "StatusError"
+var StatusReady = "Ready"
+var StatusConfiguring = "Configuring"
+var StatusError = "Error"
 
 // RedisClusterSpec defines the desired state of RedisCluster
 type RedisClusterSpec struct {

@@ -126,9 +126,8 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// cluster deleted
 		r.Log.Info("Can't find RedisCluster, nullifying the existing internal map")
 		r.Resources[RedisClusterName(r.GetRedisClusterNsName(redisCluster))] = nil
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	return ctrl.Result{}, client.IgnoreNotFound(err)
-
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -9,7 +9,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	//"golang.org/x/tools/godoc/redirect"
 	v1 "k8s.io/api/apps/v1"
@@ -103,11 +102,6 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		if errors.IsNotFound(err) {
 			// set status to Initializing
 			// create stateful set
-			// set status here
-			update_err := r.UpdateClusterState(ctx, redisCluster, v1alpha1.StatusInitializing)
-			if update_err != nil {
-				return ctrl.Result{}, update_err
-			}
 			stateful_set, create_sset_err = r.CreateStatefulSet(ctx, req, redisCluster.Spec, redisCluster.ObjectMeta.GetLabels(), config_map)
 			if create_sset_err != nil {
 				r.Log.Error(err, "Error when creating StatefulSet")
@@ -155,23 +149,8 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	r.UpdateInternalObjectReference(service, r.GetRedisClusterNsName(redisCluster))
 	r.RefreshResources(ctx, client.Object(redisCluster))
 
-	// if status is initializing, reschedule the call to check for cluster state
-	if redisCluster.Status.Status == v1alpha1.StatusInitializing {
-		r.Log.Info("Cluster state Initializing, checking if it can be updated to Ready")
-		// check the cluster state and slots allocated. if states is ok, we can reset the status
-		clusterInfo := r.GetClusterInfo(ctx, redisCluster)
-		state := clusterInfo["cluster_state"]
-		slots_ok := clusterInfo["cluster_slots_ok"]
+	return ctrl.Result{}, nil
 
-		if state == "ok" && slots_ok == "16384" {
-			r.Log.Info("Cluster state Initializing, updating to Ready")
-			return ctrl.Result{}, r.UpdateClusterState(ctx, redisCluster, v1alpha1.StatusReady)
-		} else {
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-		}
-	} else {
-		return ctrl.Result{}, nil
-	}
 }
 
 func (r *RedisClusterReconciler) FindExistingStatefulSet(ctx context.Context, req ctrl.Request) (error, *v1.StatefulSet) {
@@ -330,10 +309,13 @@ func (r *RedisClusterReconciler) GetClusterInfo(ctx context.Context, redisCluste
 	return redis.GetClusterInfo(info)
 }
 
-func (r *RedisClusterReconciler) UpdateClusterState(ctx context.Context, redisCluster *v1alpha1.RedisCluster, state string) error {
-	redisCluster.Status.Status = state
-	r.Log.Info("Updating cluster status", "status", state)
-	return r.Client.Update(ctx, redisCluster)
+func (r *RedisClusterReconciler) UpdateClusterStatus(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
+	r.Log.Info("Updating cluster status", "status", redisCluster.Status.Status, "nodes", redisCluster.Status.Nodes)
+	err := r.Client.Status().Update(ctx, redisCluster)
+	if err != nil {
+		r.Log.Error(err, "Error updating cluster status")
+	}
+	return err
 }
 
 func containsString(slice []string, s string) bool {

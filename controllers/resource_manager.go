@@ -51,18 +51,27 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, o cl
 		r.ClusterMeet(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
 	}
-	r.Log.Info("cluster", "clustersstate", redisCluster.Status)
 
 	if len(readyNodes) == int(redisCluster.Spec.Replicas) {
 		r.AssignSlots(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
 	}
-	err = r.Status().Update(ctx, redisCluster)
-	if err != nil {
-		r.Log.Error(err, "Failed to update rediscluster status")
-		return err
+
+	r.Log.Info("Checking if cluster status can be updated to Ready")
+	// check the cluster state and slots allocated. if states is ok, we can reset the status
+	clusterInfo := r.GetClusterInfo(ctx, redisCluster)
+	state := clusterInfo["cluster_state"]
+	slots_ok := clusterInfo["cluster_slots_ok"]
+
+	if state == "ok" && slots_ok == "16384" {
+		r.Log.Info("Cluster state to Ready")
+		redisCluster.Status.Status = v1alpha1.StatusReady
+	} else {
+		r.Log.Info("Cluster state to Configuring")
+		redisCluster.Status.Status = v1alpha1.StatusConfiguring
 	}
-	return nil
+
+	return r.UpdateClusterStatus(ctx, redisCluster)
 }
 
 func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
