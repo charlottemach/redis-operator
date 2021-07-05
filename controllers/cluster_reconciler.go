@@ -157,15 +157,15 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 	// if status is initializing, reschedule the call to check for cluster state
 	if redisCluster.Status.Status == v1alpha1.StatusInitializing {
+		r.Log.Info("Cluster state Initializing, checking if it can be updated to Ready")
 		// check the cluster state and slots allocated. if states is ok, we can reset the status
 		clusterInfo := r.GetClusterInfo(ctx, redisCluster)
 		state := clusterInfo["cluster_state"]
 		slots_ok := clusterInfo["cluster_slots_ok"]
 
 		if state == "ok" && slots_ok == "16384" {
-			redisCluster.Status.Status = v1alpha1.StatusReady
-			update_err := r.Client.Update(ctx, redisCluster)
-			return ctrl.Result{}, update_err
+			r.Log.Info("Cluster state Initializing, updating to Ready")
+			return ctrl.Result{}, r.UpdateClusterState(ctx, redisCluster, v1alpha1.StatusReady)
 		} else {
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
