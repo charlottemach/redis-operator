@@ -322,6 +322,9 @@ func (r *RedisClusterReconciler) FindInternalResource(ctx context.Context, o cli
  */
 
 func (r *RedisClusterReconciler) GetClusterInfo(ctx context.Context, redisCluster *v1alpha1.RedisCluster) map[string]string {
+	if len(redisCluster.Status.Nodes) == 0 {
+		return map[string]string{}
+	}
 	node := redisCluster.Status.Nodes[0]
 	secret, _ := r.GetRedisSecret(redisCluster)
 	rdb := r.GetRedisClient(ctx, node.IP, secret)
