@@ -213,7 +213,7 @@ cluster_slots_pfail:0
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := GetClusterStateMap(tt.args); !reflect.DeepEqual(got, tt.want) {
+			if got := GetClusterInfo(tt.args); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("MapToConfigString() = %v, want %v", got, tt.want)
 			}
 		})

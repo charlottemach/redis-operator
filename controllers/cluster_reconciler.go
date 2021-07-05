@@ -159,7 +159,18 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 	// if status is initializing, reschedule the call to check for cluster state
 	if redisCluster.Status.Status == v1alpha1.StatusInitializing {
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		// check the cluster state and slots allocated. if states is ok, we can reset the status
+		clusterInfo := r.GetClusterInfo(ctx, redisCluster)
+		state := clusterInfo["cluster_state"]
+		slots_ok := clusterInfo["cluster_slots_ok"]
+
+		if state == "ok" && slots_ok == "16384" {
+			redisCluster.Status.Status = v1alpha1.StatusReady
+			update_err := r.Client.Update(ctx, redisCluster)
+			return ctrl.Result{}, update_err
+		} else {
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
 	} else {
 		return ctrl.Result{}, nil
 	}
@@ -310,12 +321,12 @@ func (r *RedisClusterReconciler) FindInternalResource(ctx context.Context, o cli
 
  */
 
-func (r *RedisClusterReconciler) GetClusterState(ctx context.Context, redisCluster *v1alpha1.RedisCluster) string {
+func (r *RedisClusterReconciler) GetClusterInfo(ctx context.Context, redisCluster *v1alpha1.RedisCluster) map[string]string {
 	node := redisCluster.Status.Nodes[0]
 	secret, _ := r.GetRedisSecret(redisCluster)
 	rdb := r.GetRedisClient(ctx, node.IP, secret)
 	info, _ := rdb.ClusterInfo(ctx).Result()
-	return info
+	return redis.GetClusterInfo(info)
 }
 
 func containsString(slice []string, s string) bool {
