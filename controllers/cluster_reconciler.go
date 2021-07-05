@@ -8,6 +8,7 @@ import (
 
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -51,6 +52,7 @@ func (r *RedisClusterReconciler) GetRedisClusterNsName(o client.Object) string {
 }
 
 func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req ctrl.Request, redisCluster *v1alpha1.RedisCluster) (ctrl.Result, error) {
+	currentStatus := redisCluster.Status
 	var auth = &corev1.Secret{}
 	var err error
 	if len(redisCluster.Spec.Auth.SecretName) > 0 {
@@ -165,7 +167,10 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		redisCluster.Status.Status = v1alpha1.StatusConfiguring
 	}
 	redisCluster.Status.Nodes = r.GetReadyNodes(ctx, redisCluster.Name)
-	update_err := r.UpdateClusterStatus(ctx, redisCluster)
+	var update_err error
+	if !reflect.DeepEqual(redisCluster.Status, currentStatus) {
+		update_err = r.UpdateClusterStatus(ctx, redisCluster)
+	}
 
 	return ctrl.Result{RequeueAfter: 10 * time.Second}, update_err
 
