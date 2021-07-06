@@ -46,7 +46,7 @@ func (r *RedisClusterReconciler) StatefulSetChanges(ctx context.Context, o clien
 		r.Log.Info("ConfigureRedisCluster - secret not found", "name", redisCluster.GetName())
 		return err
 	}
-	readyNodes := r.GetReadyNodes(ctx, redisCluster.GetName())
+	readyNodes := r.GetReadyNodes(ctx, redisCluster)
 	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
 		r.ClusterMeet(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
@@ -94,6 +94,7 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, o clie
 				r.Log.Info("RedisClusterUpdate, found last pod", "podName", pod.Name)
 				// this pod gets removed, but first migrate all slots, once this done, update sset replicas count
 				// todo migrate slot
+				r.MigrateSlots(ctx, pod, redisCluster)
 				newSize := currSsetReplicas - 1
 				sset.Spec.Replicas = &newSize
 				r.Log.Info("RedisClusterUpdate - updating sset count", "newsize", newSize)
@@ -101,10 +102,25 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, o clie
 				break
 			}
 		}
-
 	}
 
 	return nil
+}
+
+func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node corev1.Pod, redisCluster *v1alpha1.RedisCluster) {
+	// get current slot range served by the node
+	// for each slot, set status importing / migrating
+	// in round robin fashion, migrate the slot to another cluster node
+	// note: this operation should be able to resume
+	secret, _ := r.GetRedisSecret(redisCluster)
+	client := r.GetRedisClient(ctx, src_node.Status.PodIP, secret)
+	slots := client.ClusterSlots(ctx).Val()
+	for _, v := range slots {
+		for slot := v.Start; slot < v.End; slot++ {
+			//client.Do("cluster", "setslot", slot, "importing", node).Err()
+
+		}
+	}
 }
 
 func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
@@ -170,11 +186,11 @@ func (r *RedisClusterReconciler) GetRedisClusterPods(ctx context.Context, cluste
 	return allPods
 }
 
-func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName string) []v1alpha1.RedisNode {
+func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster *v1alpha1.RedisCluster) []v1alpha1.RedisNode {
 	allPods := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(
 		map[string]string{
-			redis.RedisClusterLabel: clusterName,
+			redis.RedisClusterLabel: redisCluster.GetName(),
 			"app":                   "redis",
 		},
 	)
@@ -183,12 +199,16 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName 
 		LabelSelector: labelSelector,
 	})
 	readyNodes := make([]v1alpha1.RedisNode, 0)
+	redisSecret, _ := r.GetRedisSecret(redisCluster)
 	for _, pod := range allPods.Items {
 		r.Log.Info("All pods list", "pod", pod.GetName(), "labels", pod.Labels)
 		for _, s := range pod.Status.Conditions {
 			if s.Type == corev1.PodReady && s.Status == corev1.ConditionTrue {
 				r.Log.Info("Pod status ready", "podname", pod.Name, "conditions", pod.Status.Conditions)
-				readyNodes = append(readyNodes, v1alpha1.RedisNode{IP: pod.Status.PodIP, NodeName: pod.GetName()})
+				// get node id
+				redisClient := r.GetRedisClient(ctx, pod.Status.PodIP, redisSecret)
+				nodeId := redisClient.Do(ctx, "cluster", "myid").String()
+				readyNodes = append(readyNodes, v1alpha1.RedisNode{IP: pod.Status.PodIP, NodeName: pod.GetName(), NodeID: nodeId})
 			}
 		}
 	}
@@ -209,7 +229,7 @@ func (r *RedisClusterReconciler) ConfigMapChanges(ctx context.Context, o client.
 		r.Log.Error(err, "Can't find internal resource - RedisCluster")
 		return err
 	}
-	readyNodes := r.GetReadyNodes(ctx, redisCluster.GetName())
+	readyNodes := r.GetReadyNodes(ctx, redisCluster)
 	secret, _ := r.GetRedisSecret(o)
 	r.Log.Info("Secret and ready nodes", "readyNodes", readyNodes)
 	i := 0

@@ -48,6 +48,7 @@ type RedisClusterStatus struct {
 
 type RedisNode struct {
 	NodeName string `json:"name"`
+	NodeID   string `json:"nodeid"`
 	IP       string `json:"ip"`
 }
 
