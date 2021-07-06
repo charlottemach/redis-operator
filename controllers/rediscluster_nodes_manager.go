@@ -110,6 +110,7 @@ func (r *RedisClusterReconciler) UpdateInternalObjectReference(o client.Object, 
 		internalObject.ResourceVersion = o.GetResourceVersion()
 		internalObject.UpdateNeeded = true
 	}
+	r.Log.Info("new object references", "refs", r.Resources[RedisClusterName(rcn)])
 }
 
 func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -120,7 +121,7 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	if err == nil {
 		r.Log.Info("Found RedisCluster", "name", redisCluster.GetName(), "GVK", redisCluster.GroupVersionKind().String())
-		r.UpdateInternalObjectReference(redisCluster, redisCluster.GetName())
+		r.UpdateInternalObjectReference(redisCluster, r.GetRedisClusterName(redisCluster))
 		return r.ReconcileClusterObject(ctx, req, redisCluster)
 	} else {
 		// cluster deleted
