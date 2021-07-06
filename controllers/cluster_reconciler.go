@@ -167,7 +167,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		r.Log.Info("Cluster state to Configuring")
 		redisCluster.Status.Status = v1alpha1.StatusConfiguring
 	}
-	redisCluster.Status.Nodes = r.GetReadyNodes(ctx, redisCluster.Name)
+	redisCluster.Status.Nodes = r.GetReadyNodes(ctx, redisCluster)
 	var update_err error
 	if !reflect.DeepEqual(redisCluster.Status, currentStatus) {
 		update_err = r.UpdateClusterStatus(ctx, redisCluster)
