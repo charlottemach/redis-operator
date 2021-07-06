@@ -79,7 +79,7 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, o clie
 	if sset_err != nil {
 		return err
 	}
-	if redisCluster.Spec.Replicas < *(sset.Spec.Replicas) {
+	if redisCluster.Spec.Replicas < int32(sset.Spec.Size()) {
 		// downscaling, migrate nodes
 		r.Log.Info("redisCluster.Spec.Replicas < sset.Spec.Replicas, downscaling", "rc.s.r", redisCluster.Spec.Replicas, "sset.s.r", sset.Spec.Replicas)
 
@@ -88,7 +88,8 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, o clie
 		// update sset replicas to current - 1
 
 		for _, pod := range redisNodes.Items {
-			if pod.Name == fmt.Sprintf("%s-%d", redisCluster.Name, sset.Spec.Size()-1) {
+			r.Log.Info("Checking pod name", "podname", pod.Name, "generated name", fmt.Sprintf("%s-%d", r.GetRedisClusterName(o), sset.Spec.Size()-1))
+			if pod.Name == fmt.Sprintf("%s-%d", r.GetRedisClusterName(o), sset.Spec.Size()-1) {
 				r.Log.Info("RedisClusterUpdate, found last pod", "podName", pod.Name)
 				// this pod gets removed, but first migrate all slots, once this done, update sset replicas count
 				// todo migrate slot
