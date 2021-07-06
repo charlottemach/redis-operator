@@ -150,6 +150,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	r.UpdateInternalObjectReference(config_map, r.GetRedisClusterNsName(redisCluster))
 	r.UpdateInternalObjectReference(stateful_set, r.GetRedisClusterNsName(redisCluster))
 	r.UpdateInternalObjectReference(service, r.GetRedisClusterNsName(redisCluster))
+	r.UpdateInternalObjectReference(redisCluster, r.GetRedisClusterNsName(redisCluster))
 	r.RefreshResources(ctx, client.Object(redisCluster))
 
 	r.Log.Info("Checking if cluster status can be updated to Ready")
