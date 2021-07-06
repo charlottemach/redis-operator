@@ -159,7 +159,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	state := clusterInfo["cluster_state"]
 	slots_ok := clusterInfo["cluster_slots_ok"]
 
-	if state == "ok" && slots_ok == "16384" {
+	if state == "ok" && slots_ok == "16384" && redisCluster.Status.Status == v1alpha1.StatusConfiguring {
 		r.Log.Info("Cluster state to Ready")
 		redisCluster.Status.Status = v1alpha1.StatusReady
 	} else {
@@ -176,6 +176,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 }
 
+// TODO: swap return values
 func (r *RedisClusterReconciler) FindExistingStatefulSet(ctx context.Context, req ctrl.Request) (error, *v1.StatefulSet) {
 	sset := &v1.StatefulSet{}
 	err := r.Client.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, sset)
@@ -305,7 +306,7 @@ func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.Namespa
 
 /*
    FindInternalResource uses any client.Object instance to try to find a Redis cluster that it belongs to.
-   It could StatefulSet, ConfigMap, Service, etc.
+   It can accept StatefulSet, ConfigMap, Service, etc.
 */
 func (r *RedisClusterReconciler) FindInternalResource(ctx context.Context, o client.Object, into client.Object) error {
 	r.Log.Info("FindInternalResource", "o", r.GetObjectKey(o))

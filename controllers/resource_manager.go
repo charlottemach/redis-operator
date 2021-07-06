@@ -24,6 +24,7 @@ import (
 
 	//v1 "k8s.io/client-go/tools/clientcmd/api/v1"
 
+	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
@@ -31,8 +32,8 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, o client.Object) error {
-	r.Log.Info("ConfigureRedisCluster", "o", r.GetObjectKey(o))
+func (r *RedisClusterReconciler) StatefulSetChanges(ctx context.Context, o client.Object) error {
+	r.Log.Info("StatefulSetChanges", "o", r.GetObjectKey(o))
 	var err error
 	redisCluster := &v1alpha1.RedisCluster{}
 	cluster_find_error := r.FindInternalResource(ctx, o, redisCluster)
@@ -54,6 +55,51 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, o cl
 	if len(readyNodes) == int(redisCluster.Spec.Replicas) {
 		r.AssignSlots(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
+	}
+
+	return nil
+}
+
+func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, o client.Object) error {
+	r.Log.Info("RedisClusterChanges", "o", r.GetObjectKey(o))
+	var err error
+	redisCluster := &v1alpha1.RedisCluster{}
+	cluster_find_error := r.FindInternalResource(ctx, o, redisCluster)
+	if cluster_find_error != nil {
+		r.Log.Info("ConfigureRedisCluster - error", "name", redisCluster.GetName())
+		return cluster_find_error
+	}
+	//	redisSecret, err := r.GetRedisSecret(o)
+	if err != nil {
+		r.Log.Info("ConfigureRedisCluster - secret not found", "name", redisCluster.GetName())
+		return err
+	}
+	// todo: process error
+	sset_err, sset := r.FindExistingStatefulSet(ctx, controllerruntime.Request{NamespacedName: types.NamespacedName{Name: redisCluster.Name, Namespace: redisCluster.Namespace}})
+	if sset_err != nil {
+		return err
+	}
+	if redisCluster.Spec.Replicas < *(sset.Spec.Replicas) {
+		// downscaling, migrate nodes
+		r.Log.Info("redisCluster.Spec.Replicas < sset.Spec.Replicas, downscaling", "rc.s.r", redisCluster.Spec.Replicas, "sset.s.r", sset.Spec.Replicas)
+
+		// get the last replica of the sset
+		redisNodes := r.GetRedisClusterPods(ctx, r.GetRedisClusterName(o))
+		// update sset replicas to current - 1
+
+		for _, pod := range redisNodes.Items {
+			if pod.Name == fmt.Sprintf("%s-%d", redisCluster.Name, sset.Spec.Size()-1) {
+				r.Log.Info("RedisClusterUpdate, found last pod", "podName", pod.Name)
+				// this pod gets removed, but first migrate all slots, once this done, update sset replicas count
+				// todo migrate slot
+				newSize := int32(sset.Spec.Size() - 1)
+				sset.Spec.Replicas = &newSize
+				r.Log.Info("RedisClusterUpdate - updating sset count", "newsize", newSize)
+				r.Client.Update(ctx, sset)
+				break
+			}
+		}
+
 	}
 
 	return nil
@@ -106,6 +152,22 @@ func (r *RedisClusterReconciler) GetRedisClient(ctx context.Context, ip string, 
 	return rdb
 }
 
+func (r *RedisClusterReconciler) GetRedisClusterPods(ctx context.Context, clusterName string) *corev1.PodList {
+	allPods := &corev1.PodList{}
+	labelSelector := labels.SelectorFromSet(
+		map[string]string{
+			redis.RedisClusterLabel: clusterName,
+			"app":                   "redis",
+		},
+	)
+
+	r.Client.List(ctx, allPods, &client.ListOptions{
+		LabelSelector: labelSelector,
+	})
+
+	return allPods
+}
+
 func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName string) []v1alpha1.RedisNode {
 	allPods := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(
@@ -132,7 +194,7 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName 
 	return readyNodes
 }
 
-func (r *RedisClusterReconciler) ReapplyConfiguration(ctx context.Context, o client.Object) error {
+func (r *RedisClusterReconciler) ConfigMapChanges(ctx context.Context, o client.Object) error {
 	into := &v1.StatefulSet{}
 	err := r.FindInternalResource(ctx, o, into)
 	if err != nil {

@@ -173,14 +173,15 @@ func (r *RedisClusterReconciler) RefreshResources(ctx context.Context, o client.
 			switch v.ObjectType {
 			case reflect.TypeOf(&corev1.ConfigMap{}):
 				r.Log.Info("RefreshResources", "configmap", v)
-				err = r.ReapplyConfiguration(ctx, o)
+				err = r.ConfigMapChanges(ctx, o)
 				break
 			case reflect.TypeOf(&v1alpha1.RedisCluster{}):
 				r.Log.Info("RefreshResources", "rediscluster", v)
+				err = r.RedisClusterChanges(ctx, o)
 				break
 			case reflect.TypeOf(&v1.StatefulSet{}):
 				r.Log.Info("RefreshResources", "statefulset", v)
-				err = r.ConfigureRedisCluster(ctx, o)
+				err = r.StatefulSetChanges(ctx, o)
 				break
 			}
 			if err != nil {
