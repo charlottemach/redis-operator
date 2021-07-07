@@ -107,6 +107,35 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, o clie
 	return nil
 }
 
+func (r *RedisClusterReconciler) ConfigMapChanges(ctx context.Context, o client.Object) error {
+	into := &v1.StatefulSet{}
+	err := r.FindInternalResource(ctx, o, into)
+	if err != nil {
+		r.Log.Error(err, "Can't find internal resource - StatefulSet")
+		return err
+	}
+	redisCluster := &v1alpha1.RedisCluster{}
+	err = r.FindInternalResource(ctx, o, redisCluster)
+	if err != nil {
+		r.Log.Error(err, "Can't find internal resource - RedisCluster")
+		return err
+	}
+	readyNodes := r.GetReadyNodes(ctx, redisCluster)
+	secret, _ := r.GetRedisSecret(o)
+	r.Log.Info("Secret and ready nodes", "readyNodes", readyNodes)
+	i := 0
+	for _, node := range readyNodes {
+		rdb := r.GetRedisClient(ctx, node.IP, secret)
+		r.Log.Info("Running redis node shutdown", "node", node)
+		rdb.Shutdown(ctx)
+		r.Log.Info("Restarting Redis nodes", "pods", readyNodes)
+		i++
+	}
+
+	r.Recorder.Event(redisCluster, "Normal", "Configuration", "Configuration re-apply.")
+	return nil
+}
+
 func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node corev1.Pod, redisCluster *v1alpha1.RedisCluster) {
 	// get current slot range served by the node
 	// for each slot, set status importing / migrating
@@ -214,35 +243,6 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 	}
 
 	return readyNodes
-}
-
-func (r *RedisClusterReconciler) ConfigMapChanges(ctx context.Context, o client.Object) error {
-	into := &v1.StatefulSet{}
-	err := r.FindInternalResource(ctx, o, into)
-	if err != nil {
-		r.Log.Error(err, "Can't find internal resource - StatefulSet")
-		return err
-	}
-	redisCluster := &v1alpha1.RedisCluster{}
-	err = r.FindInternalResource(ctx, o, redisCluster)
-	if err != nil {
-		r.Log.Error(err, "Can't find internal resource - RedisCluster")
-		return err
-	}
-	readyNodes := r.GetReadyNodes(ctx, redisCluster)
-	secret, _ := r.GetRedisSecret(o)
-	r.Log.Info("Secret and ready nodes", "readyNodes", readyNodes)
-	i := 0
-	for _, node := range readyNodes {
-		rdb := r.GetRedisClient(ctx, node.IP, secret)
-		r.Log.Info("Running redis node shutdown", "node", node)
-		rdb.Shutdown(ctx)
-		r.Log.Info("Restarting Redis nodes", "pods", readyNodes)
-		i++
-	}
-
-	r.Recorder.Event(redisCluster, "Normal", "Configuration", "Configuration re-apply.")
-	return nil
 }
 
 func (r *RedisClusterReconciler) GetRedisSecret(o client.Object) (string, error) {
