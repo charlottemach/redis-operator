@@ -129,14 +129,13 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 	for _, v := range slots {
 		if len(v.Nodes) > 0 {
 			if v.Nodes[0].ID != src_node.NodeID {
-				r.Log.Info("MigrateSlots", "src not owner of slot", "slot", v)
+				r.Log.Info("MigrateSlots - src not owner of slot", "slot", v)
 				continue
 			}
 		}
 		r.Log.Info("MigrateSlots", "slot", v)
 		for slot := v.Start; slot < v.End; slot++ {
 			destNodeId := nodeIds[rand.Intn(len(nodeIds)-1)]
-			r.Log.Info("MigrateSlots", "slot", slot, "dst", nodes[destNodeId].NodeName)
 			dstClient := r.GetRedisClient(ctx, nodes[destNodeId].IP, secret)
 			err := srcClient.Do(ctx, "cluster", "setslot", slot, "migrating", destNodeId).Err()
 			if err != nil {
@@ -163,6 +162,7 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 			if err != nil {
 				return err
 			}
+			dstClient.Close()
 		}
 	}
 	return nil
