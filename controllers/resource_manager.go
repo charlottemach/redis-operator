@@ -207,7 +207,7 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 				r.Log.Info("Pod status ready", "podname", pod.Name, "conditions", pod.Status.Conditions)
 				// get node id
 				redisClient := r.GetRedisClient(ctx, pod.Status.PodIP, redisSecret)
-				nodeId := redisClient.Do(ctx, "cluster", "myid").String()
+				nodeId := redisClient.Do(ctx, "cluster", "myid").Val().(string)
 				readyNodes = append(readyNodes, v1alpha1.RedisNode{IP: pod.Status.PodIP, NodeName: pod.GetName(), NodeID: nodeId})
 			}
 		}
