@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"time"
 
 	//"golang.org/x/tools/godoc/redirect"
 	v1 "k8s.io/api/apps/v1"
@@ -173,7 +172,8 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		update_err = r.UpdateClusterStatus(ctx, redisCluster)
 	}
 
-	return ctrl.Result{RequeueAfter: 10 * time.Second}, update_err
+	//	return ctrl.Result{RequeueAfter: 10 * time.Second}, update_err
+	return ctrl.Result{}, update_err
 
 }
 
