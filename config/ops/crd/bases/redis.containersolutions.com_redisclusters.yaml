@@ -6313,20 +6313,23 @@ spec:
             description: RedisClusterStatus defines the observed state of RedisCluster
             properties:
               nodes:
-                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                  of cluster Important: Run "make" to regenerate code after modifying
-                  this file'
-                items:
+                additionalProperties:
                   properties:
                     ip:
                       type: string
                     name:
                       type: string
+                    nodeid:
+                      type: string
                   required:
                   - ip
                   - name
+                  - nodeid
                   type: object
-                type: array
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                type: object
               status:
                 type: string
             required:

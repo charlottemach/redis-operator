@@ -42,8 +42,8 @@ type RedisClusterSpec struct {
 type RedisClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Nodes  []RedisNode `json:"nodes"`
-	Status string      `json:"status"`
+	Nodes  map[string]*RedisNode `json:"nodes"`
+	Status string                `json:"status"`
 }
 
 type RedisNode struct {

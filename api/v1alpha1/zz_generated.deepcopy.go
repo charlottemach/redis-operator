@@ -125,8 +125,18 @@ func (in *RedisClusterStatus) DeepCopyInto(out *RedisClusterStatus) {
 	*out = *in
 	if in.Nodes != nil {
 		in, out := &in.Nodes, &out.Nodes
-		*out = make([]RedisNode, len(*in))
-		copy(*out, *in)
+		*out = make(map[string]*RedisNode, len(*in))
+		for key, val := range *in {
+			var outVal *RedisNode
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				in, out := &val, &outVal
+				*out = new(RedisNode)
+				**out = **in
+			}
+			(*out)[key] = outVal
+		}
 	}
 }
 

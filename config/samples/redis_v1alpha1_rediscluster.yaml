@@ -10,11 +10,11 @@ metadata:
     app: redis-graph
     team: team-a
 spec:
-  replicas: 1
-  storage: 3Gi
+  replicas: 3
+  storage: 2Gi
   image: redislabs/redisgraph:2.4.1
   config: |
-    maxmemory 2600mb
+    maxmemory 1800mb
     maxmemory-samples 5
     maxmemory-policy allkeys-lru
     appendonly yes
