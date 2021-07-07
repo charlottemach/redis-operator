@@ -147,11 +147,9 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 		}
 	}
-	r.UpdateInternalObjectReference(config_map, r.GetRedisClusterNsName(redisCluster))
-	r.UpdateInternalObjectReference(stateful_set, r.GetRedisClusterNsName(redisCluster))
-	r.UpdateInternalObjectReference(service, r.GetRedisClusterNsName(redisCluster))
-	r.UpdateInternalObjectReference(redisCluster, r.GetRedisClusterNsName(redisCluster))
-	r.RefreshResources(ctx, client.Object(redisCluster))
+
+	r.RedisClusterChanges(ctx, redisCluster)
+	r.StatefulSetChanges(ctx, redisCluster)
 
 	r.Log.Info("Checking if cluster status can be updated to Ready")
 	// check the cluster state and slots allocated. if states is ok, we can reset the status
@@ -167,8 +165,9 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		r.Log.Info("Cluster state to Configuring")
 		redisCluster.Status.Status = v1alpha1.StatusConfiguring
 	}
-	redisCluster.Status.Nodes = r.GetReadyNodes(ctx, redisCluster)
 	var update_err error
+	redisCluster.Status.Nodes, _ = r.GetReadyNodes(ctx, redisCluster)
+
 	if !reflect.DeepEqual(redisCluster.Status, currentStatus) {
 		update_err = r.UpdateClusterStatus(ctx, redisCluster)
 	}
@@ -303,20 +302,6 @@ func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.Namespa
 		r.Log.Error(err, "Getting secret failed", "secret", ns)
 	}
 	return err, secret
-}
-
-/*
-   FindInternalResource uses any client.Object instance to try to find a Redis cluster that it belongs to.
-   It can accept StatefulSet, ConfigMap, Service, etc.
-*/
-func (r *RedisClusterReconciler) FindInternalResource(ctx context.Context, o client.Object, into client.Object) error {
-	r.Log.Info("FindInternalResource", "o", r.GetObjectKey(o))
-	ns := types.NamespacedName{
-		Name:      r.GetRedisClusterName(o),
-		Namespace: o.GetNamespace(),
-	}
-	err := r.Client.Get(ctx, ns, into)
-	return err
 }
 
 /*

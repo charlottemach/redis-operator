@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"errors"
 	"reflect"
 	"strconv"
 
@@ -15,7 +16,6 @@ import (
 
 	//"golang.org/x/tools/godoc/redirect"
 
-	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 
 	// "k8s.io/apiextensions-apiserver/pkg/client/clientset"
@@ -32,21 +32,15 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
-func (r *RedisClusterReconciler) StatefulSetChanges(ctx context.Context, o client.Object) error {
-	r.Log.Info("StatefulSetChanges", "o", r.GetObjectKey(o))
+func (r *RedisClusterReconciler) StatefulSetChanges(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	var err error
-	redisCluster := &v1alpha1.RedisCluster{}
-	cluster_find_error := r.FindInternalResource(ctx, o, redisCluster)
-	if cluster_find_error != nil {
-		r.Log.Info("ConfigureRedisCluster - error", "name", redisCluster.GetName())
-		return cluster_find_error
-	}
-	redisSecret, err := r.GetRedisSecret(o)
+
+	redisSecret, err := r.GetRedisSecret(redisCluster)
 	if err != nil {
 		r.Log.Info("ConfigureRedisCluster - secret not found", "name", redisCluster.GetName())
 		return err
 	}
-	readyNodes := r.GetReadyNodes(ctx, redisCluster)
+	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
 		r.ClusterMeet(ctx, readyNodes, redisSecret)
 		r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
@@ -60,16 +54,9 @@ func (r *RedisClusterReconciler) StatefulSetChanges(ctx context.Context, o clien
 	return nil
 }
 
-func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, o client.Object) error {
-	r.Log.Info("RedisClusterChanges", "o", r.GetObjectKey(o))
+func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	var err error
-	redisCluster := &v1alpha1.RedisCluster{}
-	cluster_find_error := r.FindInternalResource(ctx, o, redisCluster)
-	if cluster_find_error != nil {
-		r.Log.Info("ConfigureRedisCluster - error", "name", redisCluster.GetName())
-		return cluster_find_error
-	}
-	//	redisSecret, err := r.GetRedisSecret(o)
+
 	if err != nil {
 		r.Log.Info("ConfigureRedisCluster - secret not found", "name", redisCluster.GetName())
 		return err
@@ -85,12 +72,12 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, o clie
 		r.Log.Info("redisCluster.Spec.Replicas < sset.Spec.Replicas, downscaling", "rc.s.r", redisCluster.Spec.Replicas, "sset.s.r", currSsetReplicas)
 
 		// get the last replica of the sset
-		redisNodes := r.GetRedisClusterPods(ctx, r.GetRedisClusterName(o))
+		redisNodes := r.GetRedisClusterPods(ctx, redisCluster.Name)
 		// update sset replicas to current - 1
 
 		for _, pod := range redisNodes.Items {
-			r.Log.Info("Checking pod name", "podname", pod.Name, "generated name", fmt.Sprintf("%s-%d", r.GetRedisClusterName(o), currSsetReplicas-1))
-			if pod.Name == fmt.Sprintf("%s-%d", r.GetRedisClusterName(o), currSsetReplicas-1) {
+			r.Log.Info("Checking pod name", "podname", pod.Name, "generated name", fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1))
+			if pod.Name == fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1) {
 				r.Log.Info("RedisClusterUpdate, found last pod", "podName", pod.Name)
 				// this pod gets removed, but first migrate all slots, once this done, update sset replicas count
 				// todo migrate slot
@@ -104,35 +91,6 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, o clie
 		}
 	}
 
-	return nil
-}
-
-func (r *RedisClusterReconciler) ConfigMapChanges(ctx context.Context, o client.Object) error {
-	into := &v1.StatefulSet{}
-	err := r.FindInternalResource(ctx, o, into)
-	if err != nil {
-		r.Log.Error(err, "Can't find internal resource - StatefulSet")
-		return err
-	}
-	redisCluster := &v1alpha1.RedisCluster{}
-	err = r.FindInternalResource(ctx, o, redisCluster)
-	if err != nil {
-		r.Log.Error(err, "Can't find internal resource - RedisCluster")
-		return err
-	}
-	readyNodes := r.GetReadyNodes(ctx, redisCluster)
-	secret, _ := r.GetRedisSecret(o)
-	r.Log.Info("Secret and ready nodes", "readyNodes", readyNodes)
-	i := 0
-	for _, node := range readyNodes {
-		rdb := r.GetRedisClient(ctx, node.IP, secret)
-		r.Log.Info("Running redis node shutdown", "node", node)
-		rdb.Shutdown(ctx)
-		r.Log.Info("Restarting Redis nodes", "pods", readyNodes)
-		i++
-	}
-
-	r.Recorder.Event(redisCluster, "Normal", "Configuration", "Configuration re-apply.")
 	return nil
 }
 
@@ -215,7 +173,7 @@ func (r *RedisClusterReconciler) GetRedisClusterPods(ctx context.Context, cluste
 	return allPods
 }
 
-func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster *v1alpha1.RedisCluster) []v1alpha1.RedisNode {
+func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster *v1alpha1.RedisCluster) ([]v1alpha1.RedisNode, error) {
 	allPods := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(
 		map[string]string{
@@ -236,30 +194,26 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 				r.Log.Info("Pod status ready", "podname", pod.Name, "conditions", pod.Status.Conditions)
 				// get node id
 				redisClient := r.GetRedisClient(ctx, pod.Status.PodIP, redisSecret)
-				nodeId := redisClient.Do(ctx, "cluster", "myid").Val().(string)
-				readyNodes = append(readyNodes, v1alpha1.RedisNode{IP: pod.Status.PodIP, NodeName: pod.GetName(), NodeID: nodeId})
+				nodeId := redisClient.Do(ctx, "cluster", "myid").Val()
+				if nodeId == nil {
+					return nil, errors.New("Can't fetch node id")
+				}
+				readyNodes = append(readyNodes, v1alpha1.RedisNode{IP: pod.Status.PodIP, NodeName: pod.GetName(), NodeID: nodeId.(string)})
 			}
 		}
 	}
 
-	return readyNodes
+	return readyNodes, nil
 }
 
-func (r *RedisClusterReconciler) GetRedisSecret(o client.Object) (string, error) {
-	r.Log.Info("GetRedisSecret", "o", r.GetObjectKey(o))
-	redisCluster := &v1alpha1.RedisCluster{}
-	err := r.FindInternalResource(context.TODO(), o, redisCluster)
-	if err != nil {
-		return "", err
-	}
-
+func (r *RedisClusterReconciler) GetRedisSecret(redisCluster *v1alpha1.RedisCluster) (string, error) {
 	if redisCluster.Spec.Auth.SecretName == "" {
 		r.Log.Info("GetRedisSecret - no secret name is set in the cluster, exiting")
 		return "", nil
 	}
 
 	secret := &corev1.Secret{}
-	err = r.Client.Get(context.TODO(), types.NamespacedName{Name: redisCluster.Spec.Auth.SecretName, Namespace: o.GetNamespace()}, secret)
+	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: redisCluster.Spec.Auth.SecretName, Namespace: redisCluster.Namespace}, secret)
 	if err != nil {
 		return "", err
 	}
