@@ -135,7 +135,7 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 			}
 		}
 		r.Log.Info("MigrateSlots", "slot", v)
-		for slot := v.Start; slot < v.End; slot++ {
+		for slot := v.Start; slot <= v.End; slot++ {
 			if slot == v.Start {
 				r.Log.Info("MigrateSlots - migration slot start", "slot", v)
 			}
