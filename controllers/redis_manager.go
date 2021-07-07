@@ -85,6 +85,7 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, redisC
 				// todo migrate slot
 				err := r.MigrateSlots(ctx, node, redisCluster)
 				if err != nil {
+					r.Log.Error(err, "MigrateSlots")
 					return err
 				}
 				newSize := currSsetReplicas - 1
@@ -115,10 +116,12 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 			nodeIds = append(nodeIds, nodeId)
 		}
 	}
+	r.Log.Info("MigrateSlots", "src", src_node.NodeName)
 	slots := client.ClusterSlots(ctx).Val()
 	for _, v := range slots {
 		for slot := v.Start; slot < v.End; slot++ {
 			destNodeId := nodeIds[rand.Intn(len(nodeIds)-1)]
+			r.Log.Info("MigrateSlots", "slot", slot, "dst", nodes[destNodeId].NodeName)
 			dstClient := r.GetRedisClient(ctx, nodes[destNodeId].IP, secret)
 			err := client.Do(ctx, "cluster", "setslot", slot, "migrating", src_node.NodeID).Err()
 			if err != nil {
@@ -136,7 +139,10 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 					break
 				}
 				for _, key := range keysInSlot {
-					dstClient.Migrate(ctx, nodes[destNodeId].IP, strconv.Itoa(redis.RedisCommPort), key, 0, 30*time.Second)
+					err = dstClient.Migrate(ctx, nodes[destNodeId].IP, strconv.Itoa(redis.RedisCommPort), key, 0, 30*time.Second).Err()
+					if err != nil {
+						return err
+					}
 				}
 			}
 			err = dstClient.Do(ctx, "cluster", "setslot", "node", destNodeId).Err()
