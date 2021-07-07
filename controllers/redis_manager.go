@@ -214,7 +214,6 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[stri
 func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, secret string) {
 	// when all nodes are formed in a cluster, addslots
 	r.Log.Info("ClusterMeet", "nodes", nodes)
-	var rdb *redisclient.Client
 	slots := redis.SplitNodeSlots(len(nodes))
 	i := 0
 	for _, node := range nodes {
@@ -252,8 +251,6 @@ func (r *RedisClusterReconciler) GetRedisClusterPods(ctx context.Context, cluste
 }
 
 func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster *v1alpha1.RedisCluster) (map[string]*v1alpha1.RedisNode, error) {
-	var redisClient *redisclient.Client
-
 	allPods := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(
 		map[string]string{
