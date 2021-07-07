@@ -2,8 +2,10 @@ package controllers
 
 import (
 	"errors"
+	"math/rand"
 	"reflect"
 	"strconv"
+	"time"
 
 	//"golang.org/x/tools/godoc/redirect"
 
@@ -81,7 +83,10 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, redisC
 				r.Log.Info("RedisClusterUpdate, found last pod", "podName", node.NodeName)
 				// this pod gets removed, but first migrate all slots, once this done, update sset replicas count
 				// todo migrate slot
-				r.MigrateSlots(ctx, node, redisCluster)
+				err := r.MigrateSlots(ctx, node, redisCluster)
+				if err != nil {
+					return err
+				}
 				newSize := currSsetReplicas - 1
 				sset.Spec.Replicas = &newSize
 				r.Log.Info("RedisClusterUpdate - updating sset count", "newsize", newSize)
@@ -94,21 +99,53 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, redisC
 	return nil
 }
 
-func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) {
+func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
 	// get current slot range served by the node
 	// for each slot, set status importing / migrating
 	// in round robin fashion, migrate the slot to another cluster node
 	// note: this operation should be able to resume
 	secret, _ := r.GetRedisSecret(redisCluster)
 	client := r.GetRedisClient(ctx, src_node.IP, secret)
+	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
+
+	// get all destination nodes
+	nodeIds := make([]string, 0)
+	for nodeId := range nodes {
+		if nodeId != src_node.NodeID {
+			nodeIds = append(nodeIds, nodeId)
+		}
+	}
 	slots := client.ClusterSlots(ctx).Val()
 	for _, v := range slots {
 		for slot := v.Start; slot < v.End; slot++ {
-
-			client.Do(ctx, "cluster", "setslot", slot, "importing", src_node.NodeID).Err()
-
+			destNodeId := nodeIds[rand.Intn(len(nodeIds)-1)]
+			dstClient := r.GetRedisClient(ctx, nodes[destNodeId].IP, secret)
+			err := client.Do(ctx, "cluster", "setslot", slot, "migrating", src_node.NodeID).Err()
+			if err != nil {
+				return err
+			}
+			err = dstClient.Do(ctx, "cluster", "importing", src_node.NodeID).Err()
+			if err != nil {
+				return err
+			}
+			// todo: batching
+			for i := 1; ; i++ {
+				keysInSlot := client.ClusterGetKeysInSlot(ctx, slot, 1000).Val()
+				r.Log.Info("Migrating keys", "iteration", i, "keysInSlot", len(keysInSlot))
+				if len(keysInSlot) == 0 {
+					break
+				}
+				for _, key := range keysInSlot {
+					dstClient.Migrate(ctx, nodes[destNodeId].IP, strconv.Itoa(redis.RedisCommPort), key, 0, 30*time.Second)
+				}
+			}
+			err = dstClient.Do(ctx, "cluster", "setslot", "node", destNodeId).Err()
+			if err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
