@@ -145,7 +145,7 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 					}
 				}
 			}
-			err = dstClient.Do(ctx, "cluster", "setslot", slot, "node", destNodeId).Err()
+			err = srcClient.Do(ctx, "cluster", "setslot", slot, "node", destNodeId).Err()
 			if err != nil {
 				return err
 			}
