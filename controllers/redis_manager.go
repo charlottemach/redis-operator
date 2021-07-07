@@ -81,6 +81,7 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, redisC
 			r.Log.Info("Checking pod name", "podname", node.NodeName, "generated name", fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1))
 			if node.NodeName == fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1) {
 				r.Log.Info("RedisClusterUpdate, found last pod", "podName", node.NodeName)
+				redisCluster.Status.Status = v1alpha1.StatusScalingDown
 				// this pod gets removed, but first migrate all slots, once this done, update sset replicas count
 				// todo migrate slot
 				err := r.MigrateSlots(ctx, node, redisCluster)
@@ -94,6 +95,12 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, redisC
 				r.Client.Update(ctx, sset)
 				break
 			}
+		}
+	}
+
+	if redisCluster.Spec.Replicas == currSsetReplicas {
+		if redisCluster.Status.Status == v1alpha1.StatusScalingDown {
+			redisCluster.Status.Status = v1alpha1.StatusReady
 		}
 	}
 
@@ -118,7 +125,15 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 	}
 	r.Log.Info("MigrateSlots", "src", src_node.NodeName)
 	slots := srcClient.ClusterSlots(ctx).Val()
+
 	for _, v := range slots {
+		if len(v.Nodes) > 0 {
+			if v.Nodes[0].ID != src_node.NodeID {
+				r.Log.Info("MigrateSlots", "src not owner of slot", "slot", v)
+				continue
+			}
+		}
+		r.Log.Info("MigrateSlots", "slot", v)
 		for slot := v.Start; slot < v.End; slot++ {
 			destNodeId := nodeIds[rand.Intn(len(nodeIds)-1)]
 			r.Log.Info("MigrateSlots", "slot", slot, "dst", nodes[destNodeId].NodeName)
@@ -134,7 +149,6 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 			// todo: batching
 			for i := 1; ; i++ {
 				keysInSlot := srcClient.ClusterGetKeysInSlot(ctx, slot, 1000).Val()
-				r.Log.Info("Migrating keys", "iteration", i, "keysInSlot", len(keysInSlot))
 				if len(keysInSlot) == 0 {
 					break
 				}

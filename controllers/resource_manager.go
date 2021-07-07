@@ -158,7 +158,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	state := clusterInfo["cluster_state"]
 	slots_ok := clusterInfo["cluster_slots_ok"]
 
-	if state == "ok" && slots_ok == "16384" {
+	if state == "ok" && slots_ok == "16384" && redisCluster.Status.Status == v1alpha1.StatusConfiguring {
 		r.Log.Info("Cluster state to Ready")
 		redisCluster.Status.Status = v1alpha1.StatusReady
 	} else {
