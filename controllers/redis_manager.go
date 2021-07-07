@@ -106,7 +106,7 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 	// in round robin fashion, migrate the slot to another cluster node
 	// note: this operation should be able to resume
 	secret, _ := r.GetRedisSecret(redisCluster)
-	client := r.GetRedisClient(ctx, src_node.IP, secret)
+	srcClient := r.GetRedisClient(ctx, src_node.IP, secret)
 	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
 
 	// get all destination nodes
@@ -117,23 +117,23 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 		}
 	}
 	r.Log.Info("MigrateSlots", "src", src_node.NodeName)
-	slots := client.ClusterSlots(ctx).Val()
+	slots := srcClient.ClusterSlots(ctx).Val()
 	for _, v := range slots {
 		for slot := v.Start; slot < v.End; slot++ {
 			destNodeId := nodeIds[rand.Intn(len(nodeIds)-1)]
 			r.Log.Info("MigrateSlots", "slot", slot, "dst", nodes[destNodeId].NodeName)
 			dstClient := r.GetRedisClient(ctx, nodes[destNodeId].IP, secret)
-			err := client.Do(ctx, "cluster", "setslot", slot, "migrating", src_node.NodeID).Err()
+			err := srcClient.Do(ctx, "cluster", "setslot", slot, "migrating", destNodeId).Err()
 			if err != nil {
 				return err
 			}
-			err = dstClient.Do(ctx, "cluster", "importing", src_node.NodeID).Err()
+			err = dstClient.Do(ctx, "cluster", "setslot", slot, "importing", src_node.NodeID).Err()
 			if err != nil {
 				return err
 			}
 			// todo: batching
 			for i := 1; ; i++ {
-				keysInSlot := client.ClusterGetKeysInSlot(ctx, slot, 1000).Val()
+				keysInSlot := srcClient.ClusterGetKeysInSlot(ctx, slot, 1000).Val()
 				r.Log.Info("Migrating keys", "iteration", i, "keysInSlot", len(keysInSlot))
 				if len(keysInSlot) == 0 {
 					break
