@@ -187,7 +187,6 @@ func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
 func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, secret string) {
 	r.Log.Info("ClusterMeet", "nodes", nodes)
 	var rdb *redisclient.Client
-	defer rdb.Close()
 	if len(nodes) == 0 {
 		return
 	}
@@ -198,6 +197,7 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[stri
 		if node == nil {
 			node = v
 			rdb = r.GetRedisClient(ctx, node.IP, secret)
+			defer rdb.Close()
 		}
 		r.Log.Info("Running cluster meet", "node", node)
 		err := rdb.ClusterMeet(ctx, v.IP, strconv.Itoa(redis.RedisCommPort)).Err()
@@ -212,11 +212,11 @@ func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[stri
 	// when all nodes are formed in a cluster, addslots
 	r.Log.Info("ClusterMeet", "nodes", nodes)
 	var rdb *redisclient.Client
-	defer rdb.Close()
 	slots := redis.SplitNodeSlots(len(nodes))
 	i := 0
 	for _, node := range nodes {
 		rdb := r.GetRedisClient(ctx, node.IP, secret)
+		defer rdb.Close()
 		rdb.ClusterAddSlotsRange(ctx, slots[i].Start, slots[i].End)
 		r.Log.Info("Running cluster assign slots", "pods", nodes)
 		i++
@@ -250,7 +250,7 @@ func (r *RedisClusterReconciler) GetRedisClusterPods(ctx context.Context, cluste
 
 func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster *v1alpha1.RedisCluster) (map[string]*v1alpha1.RedisNode, error) {
 	var redisClient *redisclient.Client
-	defer redisClient.Close()
+
 	allPods := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(
 		map[string]string{
@@ -271,6 +271,7 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 				r.Log.Info("Pod status ready", "podname", pod.Name, "conditions", pod.Status.Conditions)
 				// get node id
 				redisClient := r.GetRedisClient(ctx, pod.Status.PodIP, redisSecret)
+				defer redisClient.Close()
 				nodeId := redisClient.Do(ctx, "cluster", "myid").Val()
 				if nodeId == nil {
 					return nil, errors.New("Can't fetch node id")
