@@ -115,6 +115,7 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 	secret, _ := r.GetRedisSecret(redisCluster)
 	srcClient := r.GetRedisClient(ctx, src_node.IP, secret)
 	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
+	defer srcClient.Close()
 
 	// get all destination nodes
 	nodeIds := make([]string, 0)
@@ -135,6 +136,9 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 		}
 		r.Log.Info("MigrateSlots", "slot", v)
 		for slot := v.Start; slot < v.End; slot++ {
+			if slot == v.Start {
+				r.Log.Info("MigrateSlots - migration slot start", "slot", v)
+			}
 			destNodeId := nodeIds[rand.Intn(len(nodeIds)-1)]
 			dstClient := r.GetRedisClient(ctx, nodes[destNodeId].IP, secret)
 			err := srcClient.Do(ctx, "cluster", "setslot", slot, "migrating", destNodeId).Err()
@@ -165,6 +169,10 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 			dstClient.Close()
 		}
 	}
+	err := srcClient.Do(ctx, "cluster", "forget", src_node.NodeID).Err()
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -178,11 +186,14 @@ func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
 
 func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, secret string) {
 	r.Log.Info("ClusterMeet", "nodes", nodes)
+	var rdb *redisclient.Client
+	defer rdb.Close()
 	if len(nodes) == 0 {
 		return
 	}
+
 	var node *v1alpha1.RedisNode
-	var rdb *redisclient.Client
+
 	for _, v := range nodes {
 		if node == nil {
 			node = v
@@ -200,6 +211,8 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[stri
 func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, secret string) {
 	// when all nodes are formed in a cluster, addslots
 	r.Log.Info("ClusterMeet", "nodes", nodes)
+	var rdb *redisclient.Client
+	defer rdb.Close()
 	slots := redis.SplitNodeSlots(len(nodes))
 	i := 0
 	for _, node := range nodes {
@@ -236,6 +249,8 @@ func (r *RedisClusterReconciler) GetRedisClusterPods(ctx context.Context, cluste
 }
 
 func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster *v1alpha1.RedisCluster) (map[string]*v1alpha1.RedisNode, error) {
+	var redisClient *redisclient.Client
+	defer redisClient.Close()
 	allPods := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(
 		map[string]string{
