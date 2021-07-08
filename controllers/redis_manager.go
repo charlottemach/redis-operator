@@ -53,6 +53,7 @@ func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, node
 
 func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
+	r.Log.Info("ConfigureRedisCluster", "readyNodes", readyNodes, "equality", reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes))
 	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
 		r.ClusterMeet(ctx, readyNodes, redisCluster)
 		r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
