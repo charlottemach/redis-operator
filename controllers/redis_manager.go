@@ -185,11 +185,11 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 
 func (r *RedisClusterReconciler) PopulateSlots(ctx context.Context, dst_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
 	dstClient := r.GetRedisClientForNode(ctx, dst_node.NodeID, redisCluster)
-	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
+	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 
 	// get all destination nodes
 	donorNodeIds := make([]string, 0)
-	for nodeId := range nodes {
+	for nodeId := range readyNodes {
 		if nodeId != dst_node.NodeID {
 			donorNodeIds = append(donorNodeIds, nodeId)
 		}
@@ -230,7 +230,7 @@ func (r *RedisClusterReconciler) PopulateSlots(ctx context.Context, dst_node *v1
 					break
 				}
 				for _, key := range keysInSlot {
-					err = dstClient.Migrate(ctx, nodes[dst_node.NodeID].IP, strconv.Itoa(redis.RedisCommPort), key, 0, 30*time.Second).Err()
+					err = dstClient.Migrate(ctx, readyNodes[dst_node.NodeID].IP, strconv.Itoa(redis.RedisCommPort), key, 0, 30*time.Second).Err()
 					if err != nil {
 						return err
 					}
