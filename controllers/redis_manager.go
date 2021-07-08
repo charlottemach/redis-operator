@@ -172,7 +172,7 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 	}
 	r.Log.Info("MigrateSlots", "src", src_node.NodeName)
 	slots := srcClient.ClusterSlots(ctx).Val()
-
+	slotsMigrated := make(map[string]int)
 	for _, v := range slots {
 		if len(v.Nodes) > 0 {
 			if v.Nodes[0].ID != src_node.NodeID {
@@ -219,7 +219,7 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 			if err != nil {
 				return err
 			}
-
+			slotsMigrated[destNodeId]++
 		}
 	}
 	someNodeId := nodeIds[rand.Intn(len(nodeIds))]
@@ -228,6 +228,8 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 	if err != nil {
 		return err
 	}
+
+	r.Log.Info("MigrateSlots - complete", "srcnode", src_node.NodeID, "migrationStats", slotsMigrated)
 
 	return nil
 }
