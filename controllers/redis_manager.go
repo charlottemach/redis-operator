@@ -164,15 +164,7 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 			}
 			r.Log.Info("ScaleCluster - all nodes are ready. Scaling up", "replicas", currSsetReplicas)
 			r.ClusterMeet(ctx, readyNodes, redisCluster)
-			clusterNodes := r.GetRedisClientForNode(ctx, dstNodeId, redisCluster).ClusterNodes(ctx).Val()
-			for {
-				r.Log.Info("ScaleCluster - waiting meet to propagate", "readyNodes", len(readyNodes), "clusterNodes", clusterNodes)
-				if len(clusterNodes) == len(readyNodes) {
-					break
-				}
-				time.Sleep(time.Second * 3)
-				clusterNodes = r.GetRedisClientForNode(ctx, dstNodeId, redisCluster).ClusterNodes(ctx).Val()
-			}
+			time.Sleep(time.Second * 5)
 			err := r.PopulateSlots(ctx, readyNodes[dstNodeId], redisCluster)
 			if err != nil {
 				return err
