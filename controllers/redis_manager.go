@@ -151,8 +151,7 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 			}
 		}
 		if dstNodeId == "" {
-			err := errors.New("Couldn't find last node")
-			r.Log.Error(err, "dstNode couldn't be assigned", "name", redisCluster.Name, "index", currSsetReplicas-1)
+			r.Log.Error(nil, "dstNode couldn't be assigned", "name", redisCluster.Name, "index", currSsetReplicas-1)
 			return err
 		}
 		if int32(len(readyNodes)) == currSsetReplicas {
