@@ -128,11 +128,11 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 				r.Log.Info("RedisClusterUpdate - updating sset count", "newsize", newSize)
 				r.Client.Update(ctx, sset)
 
-				pvc := &corev1.PersistentVolumeClaim{}
-				pvcName := "data-" + redisCluster.Name + fmt.Sprintf("-%d", (currSsetReplicas-1))
-				r.Client.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: redisCluster.Namespace}, pvc)
-				r.Log.Info("ScaleCluster - Deleting pvc", "pvc", pvc)
-				r.Client.Delete(ctx, pvc)
+				// pvc := &corev1.PersistentVolumeClaim{}
+				// pvcName := "data-" + redisCluster.Name + fmt.Sprintf("-%d", (currSsetReplicas-1))
+				// r.Client.Get(ctx, types.NamespacedName{Name: pvcName, Namespace: redisCluster.Namespace}, pvc)
+				// r.Log.Info("ScaleCluster - Deleting pvc", "pvc", pvc)
+				// r.Client.Delete(ctx, pvc)
 
 				break
 			}
