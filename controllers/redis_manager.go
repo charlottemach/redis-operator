@@ -141,6 +141,7 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 			}
 			destNodeId := nodeIds[rand.Intn(len(nodeIds))]
 			dstClient := r.GetRedisClient(ctx, nodes[destNodeId].IP, secret)
+			dstClient.Close()
 
 			err := dstClient.Do(ctx, "cluster", "setslot", slot, "importing", src_node.NodeID).Err()
 			if err != nil {
@@ -173,10 +174,10 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 			if err != nil {
 				return err
 			}
-			dstClient.Close()
+
 		}
 	}
-	someNodeId := nodeIds[rand.Intn(len(nodeIds)-1)]
+	someNodeId := nodeIds[rand.Intn(len(nodeIds))]
 	someClient := r.GetRedisClient(ctx, nodes[someNodeId].IP, secret)
 	defer someClient.Close()
 	err := someClient.Do(ctx, "cluster", "forget", src_node.NodeID).Err()
