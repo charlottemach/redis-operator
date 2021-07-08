@@ -170,8 +170,6 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		r.UpdateScalingStatus(ctx, redisCluster)
 	case v1alpha1.StatusError:
 		r.Recorder.Event(redisCluster, "Warning", "ClusterError", "Cluster error recorded.")
-	case v1alpha1.StatusConfiguring:
-		r.CheckConfigurationStatus(ctx, redisCluster)
 	default:
 		r.ConfigureRedisCluster(ctx, redisCluster)
 		r.CheckConfigurationStatus(ctx, redisCluster)
