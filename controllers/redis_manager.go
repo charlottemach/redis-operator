@@ -256,13 +256,9 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[stri
 	}
 
 	var node *v1alpha1.RedisNode
-
+	rdb = r.GetRedisClientForNode(ctx, node.NodeID, redisCluster)
 	for _, v := range nodes {
-		if node == nil {
-			node = v
-			rdb = r.GetRedisClientForNode(ctx, node.NodeID, redisCluster)
-		}
-		r.Log.Info("Running cluster meet", "node", node)
+		r.Log.Info("Running cluster meet", "srcnode", node.NodeID, "dstnode", v.NodeID)
 		err := rdb.ClusterMeet(ctx, v.IP, strconv.Itoa(redis.RedisCommPort)).Err()
 		if err != nil {
 			r.Log.Error(err, "clustermeet failed", "nodes", nodes)
