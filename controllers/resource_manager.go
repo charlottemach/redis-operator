@@ -153,6 +153,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 	switch redisCluster.Status.Status {
 	case v1alpha1.StatusConfiguring:
+		r.ConfigureRedisCluster(ctx, redisCluster)
 		r.CheckConfigurationStatus(ctx, redisCluster)
 	case v1alpha1.StatusReady:
 		r.UpdateScalingStatus(ctx, redisCluster)
@@ -199,7 +200,6 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 	if slots_ok == "0" {
 		if len(readyNodes) == int(redisCluster.Spec.Replicas) {
 			redisCluster.Status.Status = v1alpha1.StatusConfiguring
-			r.ConfigureRedisCluster(ctx, redisCluster)
 		} else {
 			redisCluster.Status.Status = v1alpha1.StatusInitializing
 		}
