@@ -411,7 +411,6 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 	for _, pod := range allPods.Items {
 		for _, s := range pod.Status.Conditions {
 			if s.Type == corev1.PodReady && s.Status == corev1.ConditionTrue {
-				r.Log.Info("Pod status ready", "podname", pod.Name, "conditions", pod.Status.Conditions)
 				// get node id
 				redisClient := r.GetRedisClient(ctx, pod.Status.PodIP, redisSecret)
 				defer redisClient.Close()
