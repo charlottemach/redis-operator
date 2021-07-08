@@ -167,6 +167,7 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 			time.Sleep(time.Second * 5)
 			err := r.PopulateSlots(ctx, readyNodes[dstNodeId], redisCluster)
 			if err != nil {
+				r.Log.Error(err, "populateslots failed")
 				return err
 			}
 		}
