@@ -144,8 +144,9 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 	if redisCluster.Spec.Replicas == currSsetReplicas {
 		readyNodes := redisCluster.Status.Nodes
 		dstNodeId := ""
-		for nodeId, nodes := range readyNodes {
-			if nodes.NodeName == fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1) {
+		for nodeId, node := range readyNodes {
+			r.Log.Info("ScaleCluster - looking for dstNodeId", "candidate", fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1), "nodeName", node.NodeName)
+			if node.NodeName == fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1) {
 				dstNodeId = nodeId
 			}
 		}
@@ -343,7 +344,7 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[stri
 		r.Log.Info("Running cluster meet", "srcnode", alphaNode.NodeID, "dstnode", nodeId)
 		err := rdb.ClusterMeet(ctx, node.IP, strconv.Itoa(redis.RedisCommPort)).Err()
 		if err != nil {
-			r.Log.Error(err, "clustermeet failed", "nodes", nodes)
+			r.Log.Error(err, "clustermeet failed", "nodes", node)
 		}
 	}
 }
@@ -402,7 +403,6 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 	readyNodes := make(map[string]*v1alpha1.RedisNode, 0)
 	redisSecret, _ := r.GetRedisSecret(redisCluster)
 	for _, pod := range allPods.Items {
-		r.Log.Info("All pods list", "pod", pod.GetName(), "labels", pod.Labels)
 		for _, s := range pod.Status.Conditions {
 			if s.Type == corev1.PodReady && s.Status == corev1.ConditionTrue {
 				r.Log.Info("Pod status ready", "podname", pod.Name, "conditions", pod.Status.Conditions)
