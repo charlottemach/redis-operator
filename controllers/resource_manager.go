@@ -150,11 +150,12 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 	// check the cluster state and slots allocated. if states is ok, we can reset the status
 	r.Log.Info("ReconcileClusterObject", "state", redisCluster.Status.Status)
-
+	requeue := false
 	switch redisCluster.Status.Status {
 	case v1alpha1.StatusConfiguring:
 		r.ConfigureRedisCluster(ctx, redisCluster)
 		r.CheckConfigurationStatus(ctx, redisCluster)
+		requeue = true
 	case v1alpha1.StatusReady:
 		r.UpdateScalingStatus(ctx, redisCluster)
 	case v1alpha1.StatusScalingDown:
@@ -165,6 +166,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 			break
 		}
 		r.UpdateScalingStatus(ctx, redisCluster)
+		requeue = true
 	case v1alpha1.StatusScalingUp:
 		err := r.ScaleCluster(ctx, redisCluster)
 		if err != nil {
@@ -173,6 +175,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 			break
 		}
 		r.UpdateScalingStatus(ctx, redisCluster)
+		requeue = true
 	case v1alpha1.StatusError:
 		r.Recorder.Event(redisCluster, "Warning", "ClusterError", "Cluster error recorded.")
 	default:
@@ -185,7 +188,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		update_err = r.UpdateClusterStatus(ctx, redisCluster)
 	}
 
-	if redisCluster.Status.Status == v1alpha1.StatusConfiguring {
+	if requeue {
 		return ctrl.Result{RequeueAfter: time.Second * 5}, update_err
 	}
 	return ctrl.Result{}, update_err
