@@ -52,12 +52,6 @@ func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, node
 }
 
 func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
-	var err error
-
-	if err != nil {
-		r.Log.Info("ConfigureRedisCluster - secret not found", "name", redisCluster.GetName())
-		return err
-	}
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
 		r.ClusterMeet(ctx, readyNodes, redisCluster)
@@ -68,7 +62,6 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, redi
 		r.AssignSlots(ctx, readyNodes, redisCluster)
 		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
 	}
-
 	return nil
 }
 
@@ -253,9 +246,11 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[stri
 	var rdb *redisclient.Client
 	var alphaNode *v1alpha1.RedisNode
 	for nodeId, node := range nodes {
+		r.Log.Info("ClusterMeet", "node", node)
 		if alphaNode == nil {
 			alphaNode = node
 			rdb = r.GetRedisClientForNode(ctx, alphaNode.NodeID, redisCluster)
+			r.Log.Info("ClusterMeet", "alphaNode", alphaNode, "rdb", rdb)
 		}
 		r.Log.Info("Running cluster meet", "srcnode", alphaNode.NodeID, "dstnode", nodeId)
 		err := rdb.ClusterMeet(ctx, node.IP, strconv.Itoa(redis.RedisCommPort)).Err()
