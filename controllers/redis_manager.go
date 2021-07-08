@@ -207,7 +207,7 @@ func (r *RedisClusterReconciler) PopulateSlots(ctx context.Context, dst_node *v1
 				break
 			}
 
-			srcNodeId := v.Nodes[rand.Intn(len(nodeIds))].ID
+			srcNodeId := nodeIds[rand.Intn(len(nodeIds))]
 			srcClient := r.GetRedisClientForNode(ctx, srcNodeId, redisCluster)
 
 			err := dstClient.Do(ctx, "cluster", "setslot", slot, "importing", dst_node.NodeID).Err()
