@@ -272,7 +272,6 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 				continue
 			}
 		}
-		r.Log.Info("MigrateSlots", "slot", v)
 		for slot := v.Start; slot <= v.End; slot++ {
 			destNodeId := nodeIds[rand.Intn(len(nodeIds))]
 			dstClient := r.GetRedisClientForNode(ctx, destNodeId, redisCluster)
