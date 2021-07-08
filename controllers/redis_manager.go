@@ -171,6 +171,7 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 					break
 				}
 				time.Sleep(time.Second * 3)
+				clusterNodes = r.GetRedisClientForNode(ctx, dstNodeId, redisCluster).ClusterNodes(ctx).Val()
 			}
 			err := r.PopulateSlots(ctx, readyNodes[dstNodeId], redisCluster)
 			if err != nil {
