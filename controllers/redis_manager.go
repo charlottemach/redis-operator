@@ -127,6 +127,13 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 				sset.Spec.Replicas = &newSize
 				r.Log.Info("RedisClusterUpdate - updating sset count", "newsize", newSize)
 				r.Client.Update(ctx, sset)
+
+				pvc := &corev1.PersistentVolumeClaim{}
+				pvc.Name = "data-" + redisCluster.Name + fmt.Sprintf("%d", (currSsetReplicas-1))
+				pvc.Namespace = redisCluster.Namespace
+				r.Log.Info("ScaleCluster - Deleting pvc", "pvc", pvc)
+				r.Client.Delete(ctx, pvc)
+
 				break
 			}
 		}
