@@ -158,12 +158,14 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		err := r.ScaleCluster(ctx, redisCluster)
 		if err != nil {
 			redisCluster.Status.Status = v1alpha1.StatusError
+			break
 		}
 		r.UpdateScalingStatus(ctx, redisCluster)
 	case v1alpha1.StatusScalingUp:
 		err := r.ScaleCluster(ctx, redisCluster)
 		if err != nil {
 			redisCluster.Status.Status = v1alpha1.StatusError
+			break
 		}
 		r.UpdateScalingStatus(ctx, redisCluster)
 	case v1alpha1.StatusError:

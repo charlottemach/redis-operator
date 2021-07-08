@@ -82,8 +82,14 @@ func (r *RedisClusterReconciler) UpdateScalingStatus(ctx context.Context, redisC
 	}
 	if redisCluster.Spec.Replicas == currSsetReplicas {
 		if redisCluster.Status.Status == v1alpha1.StatusScalingDown {
-			r.Recorder.Event(redisCluster, "Normal", "ClusterReady", "Redis cluster scaling complete.")
+			r.Recorder.Event(redisCluster, "Normal", "ClusterReady", "Redis cluster scaling down complete.")
 			redisCluster.Status.Status = v1alpha1.StatusReady
+		}
+		if redisCluster.Status.Status == v1alpha1.StatusScalingUp {
+			r.Recorder.Event(redisCluster, "Normal", "ClusterScalingUp", "Redis cluster scaling up in progress.")
+			if len(redisCluster.Status.Nodes) == int(currSsetReplicas) {
+				redisCluster.Status.Status = v1alpha1.StatusReady
+			}
 		}
 	}
 
@@ -134,6 +140,28 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 		r.Client.Update(ctx, sset)
 	}
 
+	if redisCluster.Spec.Replicas == currSsetReplicas {
+		readyNodes := redisCluster.Status.Nodes
+		dstNodeId := ""
+		for nodeId, nodes := range readyNodes {
+			if nodes.NodeName == fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1) {
+				dstNodeId = nodeId
+			}
+		}
+		if dstNodeId == "" {
+			err := errors.New("Couldn't find last node")
+			r.Log.Error(err, "name", redisCluster.Name, "index", currSsetReplicas-1)
+			return err
+		}
+		if int32(len(readyNodes)) == currSsetReplicas {
+			r.Log.Info("ScaleCluster - all nodes are ready. Scaling up", "replicas", currSsetReplicas)
+			r.ClusterMeet(ctx, readyNodes, redisCluster)
+			err := r.PopulateSlots(ctx, readyNodes[dstNodeId], redisCluster)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -145,8 +173,69 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
    ForgetNode
 */
 
-func (r *RedisClusterReconciler) OffloadSlotsTo(ctx context.Context, dest_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
+func (r *RedisClusterReconciler) PopulateSlots(ctx context.Context, dst_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
+	srcClient := r.GetRedisClientForNode(ctx, dst_node.NodeID, redisCluster)
+	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
 
+	// get all destination nodes
+	nodeIds := make([]string, 0)
+	for nodeId := range nodes {
+		if nodeId != dst_node.NodeID {
+			nodeIds = append(nodeIds, nodeId)
+		}
+	}
+	slotsMigrated := make(map[string]int)
+	r.Log.Info("MigrateSlots", "src", dst_node.NodeName)
+	slots := srcClient.ClusterSlots(ctx).Val()
+	dstClient := r.GetRedisClientForNode(ctx, dst_node.NodeID, redisCluster)
+	slotsToMigrate := 16384 / len(nodeIds)
+	for _, v := range slots {
+		for slot := v.Start; slot <= v.End; slot++ {
+			if slot == v.Start {
+				r.Log.Info("MigrateSlots - migration slot start", "slot", v)
+			}
+			if slotsToMigrate == 0 {
+				r.Log.Info("PopulateSlots", "slotstomigrate", 0, "totalMigrated", slotsToMigrate, "stats", slotsMigrated)
+				break
+			}
+
+			srcNodeId := v.Nodes[rand.Intn(len(nodeIds))].ID
+			srcClient := r.GetRedisClientForNode(ctx, srcNodeId, redisCluster)
+
+			err := dstClient.Do(ctx, "cluster", "setslot", slot, "importing", dst_node.NodeID).Err()
+			if err != nil {
+				return err
+			}
+
+			err = srcClient.Do(ctx, "cluster", "setslot", slot, "migrating", dst_node.NodeID).Err()
+			if err != nil {
+				return err
+			}
+
+			// todo: batching
+			for i := 1; ; i++ {
+				keysInSlot := srcClient.ClusterGetKeysInSlot(ctx, slot, 1000).Val()
+				if len(keysInSlot) == 0 {
+					break
+				}
+				for _, key := range keysInSlot {
+					err = dstClient.Migrate(ctx, nodes[dst_node.NodeID].IP, strconv.Itoa(redis.RedisCommPort), key, 0, 30*time.Second).Err()
+					if err != nil {
+						return err
+					}
+				}
+			}
+			err = srcClient.Do(ctx, "cluster", "setslot", slot, "node", dst_node.NodeID).Err()
+			if err != nil {
+				return err
+			}
+			err = dstClient.Do(ctx, "cluster", "setslot", slot, "node", dst_node.NodeID).Err()
+			if err != nil {
+				return err
+			}
+			slotsMigrated[srcNodeId]++
+		}
+	}
 	return nil
 }
 
