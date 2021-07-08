@@ -159,6 +159,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	case v1alpha1.StatusScalingDown:
 		err := r.ScaleCluster(ctx, redisCluster)
 		if err != nil {
+			r.Log.Error(err, "Error when scaling down")
 			redisCluster.Status.Status = v1alpha1.StatusError
 			break
 		}
@@ -166,6 +167,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	case v1alpha1.StatusScalingUp:
 		err := r.ScaleCluster(ctx, redisCluster)
 		if err != nil {
+			r.Log.Error(err, "Error when scaling up")
 			redisCluster.Status.Status = v1alpha1.StatusError
 			break
 		}
