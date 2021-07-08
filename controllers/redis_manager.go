@@ -42,9 +42,10 @@ type RedisClient struct {
 var redisClients map[string]*RedisClient = make(map[string]*RedisClient)
 
 func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, nodeId string, redisCluster *v1alpha1.RedisCluster) *redisclient.Client {
+	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	if redisClients[nodeId] == nil {
 		secret, _ := r.GetRedisSecret(redisCluster)
-		rdb := r.GetRedisClient(ctx, redisCluster.Status.Nodes[nodeId].IP, secret)
+		rdb := r.GetRedisClient(ctx, nodes[nodeId].IP, secret)
 		redisClients[nodeId] = &RedisClient{NodeId: nodeId, RedisClient: rdb}
 	}
 
