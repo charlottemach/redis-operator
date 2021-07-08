@@ -188,27 +188,29 @@ func (r *RedisClusterReconciler) PopulateSlots(ctx context.Context, dst_node *v1
 	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
 
 	// get all destination nodes
-	nodeIds := make([]string, 0)
+	donorNodeIds := make([]string, 0)
 	for nodeId := range nodes {
 		if nodeId != dst_node.NodeID {
-			nodeIds = append(nodeIds, nodeId)
+			donorNodeIds = append(donorNodeIds, nodeId)
 		}
 	}
 	slotsMigrated := make(map[string]int)
 	r.Log.Info("MigrateSlots", "dst", dst_node.NodeName)
-	slots := r.GetRedisClientForNode(ctx, nodeIds[0], redisCluster).ClusterSlots(ctx).Val()
-	slotsToMigrate := 16384 / len(nodeIds)
+	slots := r.GetRedisClientForNode(ctx, donorNodeIds[0], redisCluster).ClusterSlots(ctx).Val()
+	//
+	slotsToMigrateFromOneDonor := 16384 / len(readyNodes) / len(donorNodeIds)
 	for _, v := range slots {
 		for slot := v.Start; slot <= v.End; slot++ {
 			if slot == v.Start {
 				r.Log.Info("MigrateSlots - migration slot start", "slot", v)
 			}
-			if slotsToMigrate == 0 {
-				r.Log.Info("PopulateSlots", "slotstomigrate", 0, "totalMigrated", slotsToMigrate, "stats", slotsMigrated)
-				break
+			srcNodeId := v.Nodes[0].ID
+
+			if slotsMigrated[srcNodeId] >= slotsToMigrateFromOneDonor {
+				r.Log.Info("PopulateSlots", "slotstomigratefromdonor", slotsMigrated[srcNodeId], "donor", srcNodeId, "stats", slotsMigrated)
+				continue
 			}
 
-			srcNodeId := v.Nodes[0].ID
 			srcClient := r.GetRedisClientForNode(ctx, srcNodeId, redisCluster)
 
 			err := dstClient.Do(ctx, "cluster", "setslot", slot, "importing", srcNodeId).Err()
@@ -429,7 +431,6 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 
 func (r *RedisClusterReconciler) GetRedisSecret(redisCluster *v1alpha1.RedisCluster) (string, error) {
 	if redisCluster.Spec.Auth.SecretName == "" {
-		r.Log.Info("GetRedisSecret - no secret name is set in the cluster, exiting")
 		return "", nil
 	}
 
