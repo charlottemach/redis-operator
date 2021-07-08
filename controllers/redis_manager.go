@@ -34,22 +34,38 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 )
 
+type RedisClient struct {
+	NodeId      string
+	RedisClient *redisclient.Client
+}
+
+var redisClients map[string]*RedisClient
+
+func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, nodeId string, redisCluster *v1alpha1.RedisCluster) *redisclient.Client {
+	if redisClients[nodeId] == nil {
+		secret, _ := r.GetRedisSecret(redisCluster)
+		rdb := r.GetRedisClient(ctx, redisCluster.Status.Nodes[nodeId].IP, secret)
+		redisClients[nodeId] = &RedisClient{NodeId: nodeId, RedisClient: rdb}
+	}
+
+	return redisClients[nodeId].RedisClient
+}
+
 func (r *RedisClusterReconciler) StatefulSetChanges(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	var err error
 
-	redisSecret, err := r.GetRedisSecret(redisCluster)
 	if err != nil {
 		r.Log.Info("ConfigureRedisCluster - secret not found", "name", redisCluster.GetName())
 		return err
 	}
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
-		r.ClusterMeet(ctx, readyNodes, redisSecret)
+		r.ClusterMeet(ctx, readyNodes, redisCluster)
 		r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
 	}
 
 	if len(readyNodes) == int(redisCluster.Spec.Replicas) {
-		r.AssignSlots(ctx, readyNodes, redisSecret)
+		r.AssignSlots(ctx, readyNodes, redisCluster)
 		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
 	}
 
@@ -107,15 +123,21 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, redisC
 	return nil
 }
 
+/*
+   New methods stubs:
+   ScaleDown
+   ScaleUp
+   ScaleInProgress
+   ForgetNode
+*/
+
 func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
 	// get current slot range served by the node
 	// for each slot, set status importing / migrating
 	// in round robin fashion, migrate the slot to another cluster node
 	// note: this operation should be able to resume
-	secret, _ := r.GetRedisSecret(redisCluster)
-	srcClient := r.GetRedisClient(ctx, src_node.IP, secret)
+	srcClient := r.GetRedisClientForNode(ctx, src_node.NodeID, redisCluster)
 	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
-	defer srcClient.Close()
 
 	// get all destination nodes
 	nodeIds := make([]string, 0)
@@ -140,8 +162,7 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 				r.Log.Info("MigrateSlots - migration slot start", "slot", v)
 			}
 			destNodeId := nodeIds[rand.Intn(len(nodeIds))]
-			dstClient := r.GetRedisClient(ctx, nodes[destNodeId].IP, secret)
-			defer dstClient.Close()
+			dstClient := r.GetRedisClientForNode(ctx, destNodeId, redisCluster)
 
 			err := dstClient.Do(ctx, "cluster", "setslot", slot, "importing", src_node.NodeID).Err()
 			if err != nil {
@@ -178,8 +199,7 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 		}
 	}
 	someNodeId := nodeIds[rand.Intn(len(nodeIds))]
-	someClient := r.GetRedisClient(ctx, nodes[someNodeId].IP, secret)
-	defer someClient.Close()
+	someClient := r.GetRedisClientForNode(ctx, someNodeId, redisCluster)
 	err := someClient.Do(ctx, "cluster", "forget", src_node.NodeID).Err()
 	if err != nil {
 		return err
@@ -196,7 +216,7 @@ func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
 	return false
 }
 
-func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, secret string) {
+func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) {
 	r.Log.Info("ClusterMeet", "nodes", nodes)
 	var rdb *redisclient.Client
 	if len(nodes) == 0 {
@@ -208,8 +228,7 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[stri
 	for _, v := range nodes {
 		if node == nil {
 			node = v
-			rdb = r.GetRedisClient(ctx, node.IP, secret)
-			defer rdb.Close()
+			rdb = r.GetRedisClientForNode(ctx, node.NodeID, redisCluster)
 		}
 		r.Log.Info("Running cluster meet", "node", node)
 		err := rdb.ClusterMeet(ctx, v.IP, strconv.Itoa(redis.RedisCommPort)).Err()
@@ -220,14 +239,13 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[stri
 }
 
 //TODO: check how many cluster slots have been already assign, and rebalance cluster if necessary
-func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, secret string) {
+func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) {
 	// when all nodes are formed in a cluster, addslots
 	r.Log.Info("ClusterMeet", "nodes", nodes)
 	slots := redis.SplitNodeSlots(len(nodes))
 	i := 0
 	for _, node := range nodes {
-		rdb := r.GetRedisClient(ctx, node.IP, secret)
-		defer rdb.Close()
+		rdb := r.GetRedisClientForNode(ctx, node.NodeID, redisCluster)
 		rdb.ClusterAddSlotsRange(ctx, slots[i].Start, slots[i].End)
 		r.Log.Info("Running cluster assign slots", "pods", nodes)
 		i++
