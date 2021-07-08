@@ -71,13 +71,14 @@ func (r *RedisClusterReconciler) UpdateScalingStatus(ctx context.Context, redisC
 	}
 	currSsetReplicas := *(sset.Spec.Replicas)
 	if redisCluster.Spec.Replicas < currSsetReplicas {
+
 		r.Recorder.Event(redisCluster, "Normal", "ClusterScalingDown", "Redis cluster scaling down required.")
 		redisCluster.Status.Status = v1alpha1.StatusScalingDown
 	}
 
 	if redisCluster.Spec.Replicas > currSsetReplicas {
 		// change status to
-		r.Recorder.Event(redisCluster, "Normal", "ClusterScalingUp", "Redis cluster scaling down required.")
+		r.Recorder.Event(redisCluster, "Normal", "ClusterScalingUp", "Redis cluster scaling up required.")
 		redisCluster.Status.Status = v1alpha1.StatusScalingUp
 	}
 	if redisCluster.Spec.Replicas == currSsetReplicas {
@@ -86,7 +87,7 @@ func (r *RedisClusterReconciler) UpdateScalingStatus(ctx context.Context, redisC
 			redisCluster.Status.Status = v1alpha1.StatusReady
 		}
 		if redisCluster.Status.Status == v1alpha1.StatusScalingUp {
-			r.Recorder.Event(redisCluster, "Normal", "ClusterScalingUp", "Redis cluster scaling up in progress.")
+			r.Recorder.Event(redisCluster, "Normal", "ClusterScalingUp", "Redis cluster scaling up complete.")
 			if len(redisCluster.Status.Nodes) == int(currSsetReplicas) {
 				redisCluster.Status.Status = v1alpha1.StatusReady
 			}
@@ -150,7 +151,7 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 		}
 		if dstNodeId == "" {
 			err := errors.New("Couldn't find last node")
-			r.Log.Error(err, "name", redisCluster.Name, "index", currSsetReplicas-1)
+			r.Log.Error(err, "dstNode couldn't be assigned", "name", redisCluster.Name, "index", currSsetReplicas-1)
 			return err
 		}
 		if int32(len(readyNodes)) == currSsetReplicas {
