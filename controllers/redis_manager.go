@@ -64,7 +64,7 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, redi
 	return nil
 }
 
-func (r *RedisClusterReconciler) SetScalingStatus(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
+func (r *RedisClusterReconciler) UpdateScalingStatus(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	sset_err, sset := r.FindExistingStatefulSet(ctx, controllerruntime.Request{NamespacedName: types.NamespacedName{Name: redisCluster.Name, Namespace: redisCluster.Namespace}})
 	if sset_err != nil {
 		return sset_err
@@ -92,11 +92,6 @@ func (r *RedisClusterReconciler) SetScalingStatus(ctx context.Context, redisClus
 
 func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	var err error
-
-	if err != nil {
-		r.Log.Info("ConfigureRedisCluster - secret not found", "name", redisCluster.GetName())
-		return err
-	}
 	// todo: process error
 	sset_err, sset := r.FindExistingStatefulSet(ctx, controllerruntime.Request{NamespacedName: types.NamespacedName{Name: redisCluster.Name, Namespace: redisCluster.Namespace}})
 	if sset_err != nil {

@@ -153,17 +153,19 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 	switch redisCluster.Status.Status {
 	case v1alpha1.StatusReady:
-		r.SetScalingStatus(ctx, redisCluster)
+		r.UpdateScalingStatus(ctx, redisCluster)
 	case v1alpha1.StatusScalingDown:
 		err := r.ScaleCluster(ctx, redisCluster)
 		if err != nil {
 			redisCluster.Status.Status = v1alpha1.StatusError
 		}
+		r.UpdateScalingStatus(ctx, redisCluster)
 	case v1alpha1.StatusScalingUp:
 		err := r.ScaleCluster(ctx, redisCluster)
 		if err != nil {
 			redisCluster.Status.Status = v1alpha1.StatusError
 		}
+		r.UpdateScalingStatus(ctx, redisCluster)
 	case v1alpha1.StatusError:
 		r.Recorder.Event(redisCluster, "Error", "ClusterError", "Cluster error recorded.")
 	default:
