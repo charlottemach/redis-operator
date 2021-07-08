@@ -157,6 +157,14 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 			}
 			r.Log.Info("ScaleCluster - all nodes are ready. Scaling up", "replicas", currSsetReplicas)
 			r.ClusterMeet(ctx, readyNodes, redisCluster)
+			clusterNodes := r.GetRedisClientForNode(ctx, dstNodeId, redisCluster).ClusterNodes(ctx).Val()
+			for {
+				r.Log.Info("ScaleCluster - waiting meet to propagate", "readyNodes", len(readyNodes), "clusterNodes", clusterNodes)
+				if len(clusterNodes) == len(readyNodes) {
+					break
+				}
+				time.Sleep(time.Second * 3)
+			}
 			err := r.PopulateSlots(ctx, readyNodes[dstNodeId], redisCluster)
 			if err != nil {
 				return err
@@ -175,7 +183,7 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 */
 
 func (r *RedisClusterReconciler) PopulateSlots(ctx context.Context, dst_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
-	srcClient := r.GetRedisClientForNode(ctx, dst_node.NodeID, redisCluster)
+	dstClient := r.GetRedisClientForNode(ctx, dst_node.NodeID, redisCluster)
 	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
 
 	// get all destination nodes
@@ -186,9 +194,8 @@ func (r *RedisClusterReconciler) PopulateSlots(ctx context.Context, dst_node *v1
 		}
 	}
 	slotsMigrated := make(map[string]int)
-	r.Log.Info("MigrateSlots", "src", dst_node.NodeName)
-	slots := srcClient.ClusterSlots(ctx).Val()
-	dstClient := r.GetRedisClientForNode(ctx, dst_node.NodeID, redisCluster)
+	r.Log.Info("MigrateSlots", "dst", dst_node.NodeName)
+	slots := r.GetRedisClientForNode(ctx, nodeIds[0], redisCluster).ClusterSlots(ctx).Val()
 	slotsToMigrate := 16384 / len(nodeIds)
 	for _, v := range slots {
 		for slot := v.Start; slot <= v.End; slot++ {
