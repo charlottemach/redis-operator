@@ -223,13 +223,13 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 		}
 	}
 	someNodeId := nodeIds[rand.Intn(len(nodeIds))]
+	r.Log.Info("MigrateSlots - complete", "srcnode", src_node.NodeID, "migrationStats", slotsMigrated)
 	someClient := r.GetRedisClientForNode(ctx, someNodeId, redisCluster)
+	r.Log.Info("MigrateSlots - running cluster forget on node", "node", someNodeId, "client", someClient)
 	err := someClient.Do(ctx, "cluster", "forget", src_node.NodeID).Err()
 	if err != nil {
 		return err
 	}
-
-	r.Log.Info("MigrateSlots - complete", "srcnode", src_node.NodeID, "migrationStats", slotsMigrated)
 
 	return nil
 }
