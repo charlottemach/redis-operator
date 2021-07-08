@@ -54,10 +54,8 @@ func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, node
 func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	r.Log.Info("ConfigureRedisCluster", "readyNodes", readyNodes, "equality", reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes))
-	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
-		r.ClusterMeet(ctx, readyNodes, redisCluster)
-		r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
-	}
+	r.ClusterMeet(ctx, readyNodes, redisCluster)
+	r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
 
 	if len(readyNodes) == int(redisCluster.Spec.Replicas) {
 		r.AssignSlots(ctx, readyNodes, redisCluster)
@@ -264,7 +262,7 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[stri
 //TODO: check how many cluster slots have been already assign, and rebalance cluster if necessary
 func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) {
 	// when all nodes are formed in a cluster, addslots
-	r.Log.Info("ClusterMeet", "nodes", nodes)
+	r.Log.Info("AssignSlots", "nodes", nodes)
 	slots := redis.SplitNodeSlots(len(nodes))
 	i := 0
 	for _, node := range nodes {

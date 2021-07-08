@@ -331,7 +331,7 @@ func (r *RedisClusterReconciler) GetSecret(ctx context.Context, ns types.Namespa
 
 func (r *RedisClusterReconciler) GetClusterInfo(ctx context.Context, redisCluster *v1alpha1.RedisCluster) map[string]string {
 	if len(redisCluster.Status.Nodes) == 0 {
-		r.Log.Info("No ready nodes availableo on the cluster.", "clusterinfo", map[string]string{})
+		r.Log.Info("No ready nodes available on the cluster.", "clusterinfo", map[string]string{})
 		return map[string]string{}
 	}
 	nodes := r.GetRedisClusterPods(ctx, redisCluster.Name)
