@@ -201,9 +201,6 @@ func (r *RedisClusterReconciler) PopulateSlots(ctx context.Context, dst_node *v1
 	slotsToMigrateFromOneDonor := 16384 / len(readyNodes) / len(donorNodeIds)
 	for _, v := range slots {
 		for slot := v.Start; slot <= v.End; slot++ {
-			if slot == v.Start {
-				r.Log.Info("MigrateSlots - migration slot start", "slot", v)
-			}
 			srcNodeId := v.Nodes[0].ID
 
 			if slotsMigrated[srcNodeId] >= slotsToMigrateFromOneDonor {
@@ -277,9 +274,6 @@ func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1a
 		}
 		r.Log.Info("MigrateSlots", "slot", v)
 		for slot := v.Start; slot <= v.End; slot++ {
-			if slot == v.Start {
-				r.Log.Info("MigrateSlots - migration slot start", "slot", v)
-			}
 			destNodeId := nodeIds[rand.Intn(len(nodeIds))]
 			dstClient := r.GetRedisClientForNode(ctx, destNodeId, redisCluster)
 
