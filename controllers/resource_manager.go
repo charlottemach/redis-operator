@@ -148,7 +148,6 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	}
 
 	// check the cluster state and slots allocated. if states is ok, we can reset the status
-	redisCluster.Status.Nodes, _ = r.GetReadyNodes(ctx, redisCluster)
 	r.Log.Info("ReconcileClusterObject", "state", redisCluster.Status.Status)
 
 	switch redisCluster.Status.Status {
@@ -178,7 +177,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	}
 
 	var update_err error
-
+	redisCluster.Status.Nodes, _ = r.GetReadyNodes(ctx, redisCluster)
 	if !reflect.DeepEqual(redisCluster.Status, currentStatus) {
 		update_err = r.UpdateClusterStatus(ctx, redisCluster)
 	}
@@ -198,7 +197,7 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 		redisCluster.Status.Status = v1alpha1.StatusReady
 	}
 	if slots_ok == "0" {
-		if len(readyNodes) == int(redisCluster.Spec.Replicas) {
+		if len(readyNodes) == len(redisCluster.Status.Nodes) {
 			redisCluster.Status.Status = v1alpha1.StatusConfiguring
 		} else {
 			redisCluster.Status.Status = v1alpha1.StatusInitializing
