@@ -152,6 +152,8 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	r.Log.Info("ReconcileClusterObject", "state", redisCluster.Status.Status)
 
 	switch redisCluster.Status.Status {
+	case v1alpha1.StatusConfiguring:
+		r.ConfigureRedisCluster(ctx, redisCluster)
 	case v1alpha1.StatusReady:
 		r.UpdateScalingStatus(ctx, redisCluster)
 	case v1alpha1.StatusScalingDown:
@@ -171,7 +173,6 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	case v1alpha1.StatusError:
 		r.Recorder.Event(redisCluster, "Warning", "ClusterError", "Cluster error recorded.")
 	default:
-		r.ConfigureRedisCluster(ctx, redisCluster)
 		r.CheckConfigurationStatus(ctx, redisCluster)
 	}
 
@@ -191,14 +192,19 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 	r.Log.Info("Cluster info", "clusterinfo", clusterInfo)
 	state := clusterInfo["cluster_state"]
 	slots_ok := clusterInfo["cluster_slots_ok"]
+	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	if state == "ok" && slots_ok == "16384" {
 		redisCluster.Status.Status = v1alpha1.StatusReady
-	} else {
-
-		redisCluster.Status.Status = v1alpha1.StatusConfiguring
+	}
+	if slots_ok == "0" {
+		if len(readyNodes) == int(redisCluster.Spec.Replicas) {
+			redisCluster.Status.Status = v1alpha1.StatusConfiguring
+		} else {
+			redisCluster.Status.Status = v1alpha1.StatusInitializing
+		}
 	}
 
-	r.Log.Info("Cluster state check", "cluster_state", state, "cluster_slots_ok", slots_ok)
+	r.Log.Info("Cluster state check", "cluster_state", state, "cluster_slots_ok", slots_ok, "status", redisCluster.Status.Status)
 }
 
 // TODO: swap return values

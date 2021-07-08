@@ -25,6 +25,7 @@ var StatusScalingDown = "ScalingDown"
 var StatusScalingUp = "ScalingUp"
 var StatusReady = "Ready"
 var StatusConfiguring = "Configuring"
+var StatusInitializing = "Initializing"
 var StatusError = "Error"
 
 // RedisClusterSpec defines the desired state of RedisCluster
