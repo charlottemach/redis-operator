@@ -358,7 +358,7 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[stri
 //TODO: check how many cluster slots have been already assign, and rebalance cluster if necessary
 func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) {
 	// when all nodes are formed in a cluster, addslots
-	r.Log.Info("AssignSlots", "nodes", nodes)
+	r.Log.Info("AssignSlots", "nodeslen", len(nodes), "nodes", nodes)
 	slots := redis.SplitNodeSlots(len(nodes))
 	i := 0
 	for _, node := range nodes {
