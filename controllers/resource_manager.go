@@ -197,7 +197,7 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 		redisCluster.Status.Status = v1alpha1.StatusReady
 	}
 	if slots_ok == "0" {
-		if len(readyNodes) == len(redisCluster.Status.Nodes) && len(readyNodes) == int(redisCluster.Spec.Replicas) {
+		if len(readyNodes) == int(redisCluster.Spec.Replicas) {
 			redisCluster.Status.Status = v1alpha1.StatusConfiguring
 		} else {
 			redisCluster.Status.Status = v1alpha1.StatusInitializing
