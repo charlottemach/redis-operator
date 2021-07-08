@@ -149,21 +149,29 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 	r.Log.Info("Checking if cluster status can be updated to Ready")
 	// check the cluster state and slots allocated. if states is ok, we can reset the status
+	redisCluster.Status.Nodes, _ = r.GetReadyNodes(ctx, redisCluster)
 
 	switch redisCluster.Status.Status {
 	case v1alpha1.StatusReady:
 		r.SetScalingStatus(ctx, redisCluster)
 	case v1alpha1.StatusScalingDown:
-		r.ScaleCluster(ctx, redisCluster)
+		err := r.ScaleCluster(ctx, redisCluster)
+		if err != nil {
+			redisCluster.Status.Status = v1alpha1.StatusError
+		}
 	case v1alpha1.StatusScalingUp:
-		r.ScaleCluster(ctx, redisCluster)
+		err := r.ScaleCluster(ctx, redisCluster)
+		if err != nil {
+			redisCluster.Status.Status = v1alpha1.StatusError
+		}
+	case v1alpha1.StatusError:
+		r.Recorder.Event(redisCluster, "Error", "ClusterError", "Cluster error recorded.")
 	default:
 		r.ConfigureRedisCluster(ctx, redisCluster)
 		r.CheckConfigurationStatus(ctx, redisCluster)
 	}
 
 	var update_err error
-	redisCluster.Status.Nodes, _ = r.GetReadyNodes(ctx, redisCluster)
 
 	if !reflect.DeepEqual(redisCluster.Status, currentStatus) {
 		update_err = r.UpdateClusterStatus(ctx, redisCluster)
@@ -186,7 +194,6 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 		redisCluster.Status.Status = v1alpha1.StatusConfiguring
 	}
 
-	//	if state == "ok" && slots_ok == "16384" && redisCluster.Status.Status == v1alpha1.StatusConfiguring {
 	r.Log.Info("Cluster state check", "cluster_state", state, "cluster_slots_ok", slots_ok)
 }
 

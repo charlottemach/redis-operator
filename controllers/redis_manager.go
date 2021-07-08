@@ -123,9 +123,7 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 			r.Log.Info("Checking pod name", "podname", node.NodeName, "generated name", fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1))
 			if node.NodeName == fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1) {
 				r.Log.Info("RedisClusterUpdate, found last pod", "podName", node.NodeName)
-				redisCluster.Status.Status = v1alpha1.StatusScalingDown
 				// this pod gets removed, but first migrate all slots, once this done, update sset replicas count
-				// todo migrate slot
 				err := r.MigrateSlots(ctx, node, redisCluster)
 				if err != nil {
 					r.Log.Error(err, "MigrateSlots")
