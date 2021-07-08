@@ -147,9 +147,9 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		}
 	}
 
-	r.Log.Info("Checking if cluster status can be updated to Ready")
 	// check the cluster state and slots allocated. if states is ok, we can reset the status
 	redisCluster.Status.Nodes, _ = r.GetReadyNodes(ctx, redisCluster)
+	r.Log.Info("ReconcileClusterObject", "state", redisCluster.Status.Status)
 
 	switch redisCluster.Status.Status {
 	case v1alpha1.StatusReady:
