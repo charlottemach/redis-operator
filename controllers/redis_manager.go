@@ -83,11 +83,11 @@ func (r *RedisClusterReconciler) UpdateScalingStatus(ctx context.Context, redisC
 	}
 	if redisCluster.Spec.Replicas == currSsetReplicas {
 		if redisCluster.Status.Status == v1alpha1.StatusScalingDown {
-			r.Recorder.Event(redisCluster, "Normal", "ClusterReady", "Redis cluster scaling down complete.")
+			r.Recorder.Event(redisCluster, "Normal", "ClusterReady", "Redis cluster scaling down.")
 			redisCluster.Status.Status = v1alpha1.StatusReady
 		}
 		if redisCluster.Status.Status == v1alpha1.StatusScalingUp {
-			r.Recorder.Event(redisCluster, "Normal", "ClusterScalingUp", "Redis cluster scaling up complete.")
+			r.Recorder.Event(redisCluster, "Normal", "ClusterScalingUp", "Redis cluster scaling up.")
 			if len(redisCluster.Status.Nodes) == int(currSsetReplicas) {
 				redisCluster.Status.Status = v1alpha1.StatusReady
 			}
