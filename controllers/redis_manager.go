@@ -57,10 +57,9 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, redi
 	r.ClusterMeet(ctx, readyNodes, redisCluster)
 	r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
 
-	if len(readyNodes) == int(redisCluster.Spec.Replicas) {
-		r.AssignSlots(ctx, readyNodes, redisCluster)
-		r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
-	}
+	r.AssignSlots(ctx, readyNodes, redisCluster)
+	r.Recorder.Event(redisCluster, "Normal", "SlotAssignment", "Slot assignment execution complete")
+
 	return nil
 }
 
