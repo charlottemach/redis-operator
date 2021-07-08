@@ -147,24 +147,21 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		}
 	}
 
-	r.RedisClusterChanges(ctx, redisCluster)
-	r.StatefulSetChanges(ctx, redisCluster)
-
 	r.Log.Info("Checking if cluster status can be updated to Ready")
 	// check the cluster state and slots allocated. if states is ok, we can reset the status
-	clusterInfo := r.GetClusterInfo(ctx, redisCluster)
-	r.Log.Info("Cluster info", "clusterinfo", clusterInfo)
-	state := clusterInfo["cluster_state"]
-	slots_ok := clusterInfo["cluster_slots_ok"]
 
-	//	if state == "ok" && slots_ok == "16384" && redisCluster.Status.Status == v1alpha1.StatusConfiguring {
-	r.Log.Info("Cluster state check", "cluster_state", state, "cluster_slots_ok", slots_ok)
-	if state == "ok" && slots_ok == "16384" {
-		redisCluster.Status.Status = v1alpha1.StatusReady
-	} else {
-
-		redisCluster.Status.Status = v1alpha1.StatusConfiguring
+	switch redisCluster.Status.Status {
+	case v1alpha1.StatusReady:
+		r.SetScalingStatus(ctx, redisCluster)
+	case v1alpha1.StatusScalingDown:
+		r.ScaleCluster(ctx, redisCluster)
+	case v1alpha1.StatusScalingUp:
+		r.ScaleCluster(ctx, redisCluster)
+	default:
+		r.ConfigureRedisCluster(ctx, redisCluster)
+		r.CheckConfigurationStatus(ctx, redisCluster)
 	}
+
 	var update_err error
 	redisCluster.Status.Nodes, _ = r.GetReadyNodes(ctx, redisCluster)
 
@@ -175,6 +172,22 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	//	return ctrl.Result{RequeueAfter: 10 * time.Second}, update_err
 	return ctrl.Result{}, update_err
 
+}
+
+func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, redisCluster *v1alpha1.RedisCluster) {
+	clusterInfo := r.GetClusterInfo(ctx, redisCluster)
+	r.Log.Info("Cluster info", "clusterinfo", clusterInfo)
+	state := clusterInfo["cluster_state"]
+	slots_ok := clusterInfo["cluster_slots_ok"]
+	if state == "ok" && slots_ok == "16384" {
+		redisCluster.Status.Status = v1alpha1.StatusReady
+	} else {
+
+		redisCluster.Status.Status = v1alpha1.StatusConfiguring
+	}
+
+	//	if state == "ok" && slots_ok == "16384" && redisCluster.Status.Status == v1alpha1.StatusConfiguring {
+	r.Log.Info("Cluster state check", "cluster_state", state, "cluster_slots_ok", slots_ok)
 }
 
 // TODO: swap return values

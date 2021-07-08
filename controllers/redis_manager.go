@@ -39,7 +39,7 @@ type RedisClient struct {
 	RedisClient *redisclient.Client
 }
 
-var redisClients map[string]*RedisClient
+var redisClients map[string]*RedisClient = make(map[string]*RedisClient)
 
 func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, nodeId string, redisCluster *v1alpha1.RedisCluster) *redisclient.Client {
 	if redisClients[nodeId] == nil {
@@ -51,7 +51,7 @@ func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, node
 	return redisClients[nodeId].RedisClient
 }
 
-func (r *RedisClusterReconciler) StatefulSetChanges(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
+func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	var err error
 
 	if err != nil {
@@ -72,7 +72,33 @@ func (r *RedisClusterReconciler) StatefulSetChanges(ctx context.Context, redisCl
 	return nil
 }
 
-func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
+func (r *RedisClusterReconciler) SetScalingStatus(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
+	sset_err, sset := r.FindExistingStatefulSet(ctx, controllerruntime.Request{NamespacedName: types.NamespacedName{Name: redisCluster.Name, Namespace: redisCluster.Namespace}})
+	if sset_err != nil {
+		return sset_err
+	}
+	currSsetReplicas := *(sset.Spec.Replicas)
+	if redisCluster.Spec.Replicas < currSsetReplicas {
+		r.Recorder.Event(redisCluster, "Normal", "ClusterScalingDown", "Redis cluster scaling down required.")
+		redisCluster.Status.Status = v1alpha1.StatusScalingDown
+	}
+
+	if redisCluster.Spec.Replicas > currSsetReplicas {
+		// change status to
+		r.Recorder.Event(redisCluster, "Normal", "ClusterScalingUp", "Redis cluster scaling down required.")
+		redisCluster.Status.Status = v1alpha1.StatusScalingUp
+	}
+	if redisCluster.Spec.Replicas == currSsetReplicas {
+		if redisCluster.Status.Status == v1alpha1.StatusScalingDown {
+			r.Recorder.Event(redisCluster, "Normal", "ClusterReady", "Redis cluster scaling complete.")
+			redisCluster.Status.Status = v1alpha1.StatusReady
+		}
+	}
+
+	return nil
+}
+
+func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	var err error
 
 	if err != nil {
@@ -97,7 +123,7 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, redisC
 			r.Log.Info("Checking pod name", "podname", node.NodeName, "generated name", fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1))
 			if node.NodeName == fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1) {
 				r.Log.Info("RedisClusterUpdate, found last pod", "podName", node.NodeName)
-				// redisCluster.Status.Status = v1alpha1.StatusScalingDown
+				redisCluster.Status.Status = v1alpha1.StatusScalingDown
 				// this pod gets removed, but first migrate all slots, once this done, update sset replicas count
 				// todo migrate slot
 				err := r.MigrateSlots(ctx, node, redisCluster)
@@ -114,11 +140,14 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, redisC
 		}
 	}
 
-	// if redisCluster.Spec.Replicas == currSsetReplicas {
-	// 	if redisCluster.Status.Status == v1alpha1.StatusScalingDown {
-	// 		redisCluster.Status.Status = v1alpha1.StatusReady
-	// 	}
-	// }
+	if redisCluster.Spec.Replicas > currSsetReplicas {
+		// change status to
+		redisCluster.Status.Status = v1alpha1.StatusScalingUp
+		newSize := currSsetReplicas + 1
+		sset.Spec.Replicas = &newSize
+		r.Log.Info("RedisClusterUpdate - updating sset count", "newsize", newSize)
+		r.Client.Update(ctx, sset)
+	}
 
 	return nil
 }
@@ -130,6 +159,11 @@ func (r *RedisClusterReconciler) RedisClusterChanges(ctx context.Context, redisC
    ScaleInProgress
    ForgetNode
 */
+
+func (r *RedisClusterReconciler) OffloadSlotsTo(ctx context.Context, dest_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
+
+	return nil
+}
 
 func (r *RedisClusterReconciler) MigrateSlots(ctx context.Context, src_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
 	// get current slot range served by the node
