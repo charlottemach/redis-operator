@@ -144,17 +144,17 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 	if redisCluster.Spec.Replicas == currSsetReplicas {
 		readyNodes := redisCluster.Status.Nodes
 		dstNodeId := ""
-		for nodeId, node := range readyNodes {
-			r.Log.Info("ScaleCluster - looking for dstNodeId", "candidate", fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1), "nodeName", node.NodeName)
-			if node.NodeName == fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1) {
-				dstNodeId = nodeId
-			}
-		}
-		if dstNodeId == "" {
-			r.Log.Error(nil, "dstNode couldn't be assigned", "name", redisCluster.Name, "index", currSsetReplicas-1)
-			return err
-		}
 		if int32(len(readyNodes)) == currSsetReplicas {
+			for nodeId, node := range readyNodes {
+				r.Log.Info("ScaleCluster - looking for dstNodeId", "candidate", fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1), "nodeName", node.NodeName)
+				if node.NodeName == fmt.Sprintf("%s-%d", redisCluster.Name, currSsetReplicas-1) {
+					dstNodeId = nodeId
+				}
+			}
+			if dstNodeId == "" {
+				r.Log.Error(nil, "dstNode couldn't be assigned", "name", redisCluster.Name, "index", currSsetReplicas-1)
+				return err
+			}
 			r.Log.Info("ScaleCluster - all nodes are ready. Scaling up", "replicas", currSsetReplicas)
 			r.ClusterMeet(ctx, readyNodes, redisCluster)
 			err := r.PopulateSlots(ctx, readyNodes[dstNodeId], redisCluster)
