@@ -150,6 +150,9 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 	// check the cluster state and slots allocated. if states is ok, we can reset the status
 	r.Log.Info("ReconcileClusterObject", "state", redisCluster.Status.Status)
+	// Update slots ranges
+	redisCluster.Status.Slots = r.GetSlotsRanges(redisCluster.Spec.Replicas)
+
 	requeue := false
 	switch redisCluster.Status.Status {
 	case v1alpha1.StatusConfiguring:

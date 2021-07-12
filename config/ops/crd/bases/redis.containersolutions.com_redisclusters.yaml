@@ -6330,10 +6330,23 @@ spec:
                   of cluster Important: Run "make" to regenerate code after modifying
                   this file'
                 type: object
+              slots:
+                items:
+                  properties:
+                    end:
+                      type: integer
+                    start:
+                      type: integer
+                  required:
+                  - end
+                  - start
+                  type: object
+                type: array
               status:
                 type: string
             required:
             - nodes
+            - slots
             - status
             type: object
         type: object
