@@ -66,7 +66,11 @@ type RedisAuth struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-
+//+kubebuilder:resource:shortName=rdcl
+//+kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.replicas",description="Amount of Redis nodes"
+//+kubebuilder:printcolumn:name="Image",type="string",JSONPath=".spec.image",description="Source image for Redis instance"
+//+kubebuilder:printcolumn:name="Storage",type="string",JSONPath=".spec.storage",description="Amount of storage for Redis"
+//+kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.status",description="The status of Redis cluster"
 // RedisCluster is the Schema for the redisclusters API
 type RedisCluster struct {
 	metav1.TypeMeta   `json:",inline"`

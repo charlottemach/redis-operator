@@ -13,10 +13,29 @@ spec:
     kind: RedisCluster
     listKind: RedisClusterList
     plural: redisclusters
+    shortNames:
+    - rdcl
     singular: rediscluster
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Amount of Redis nodes
+      jsonPath: .spec.replicas
+      name: Replicas
+      type: integer
+    - description: Source image for Redis instance
+      jsonPath: .spec.image
+      name: Image
+      type: string
+    - description: Amount of storage for Redis
+      jsonPath: .spec.storage
+      name: Storage
+      type: string
+    - description: The status of Redis cluster
+      jsonPath: .status.status
+      name: Status
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: RedisCluster is the Schema for the redisclusters API

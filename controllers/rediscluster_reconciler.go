@@ -66,10 +66,8 @@ type RedisClusterReconciler struct {
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get
 //+kubebuilder:rbac:groups=apps,resources=statefulsets;deployments,verbs=get;list;watch
 //+kubebuilder:rbac:groups="",resources=configmap;services;pods,verbs=get;list;watch
-
 //+kubebuilder:rbac:groups="",resources=configmaps;services,verbs=get;list;create;delete
 //+kubebuilder:rbac:groups=apps,resources=statefulsets;deployments,verbs=create;delete;patch;update
-
 func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
 	r.Log.Info("RedisCluster reconciler called", "name", req.Name, "ns", req.Namespace)
