@@ -137,6 +137,9 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 }
 
 func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, slot int, src_node, dst_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
+	if dst_node == nil || src_node == nil {
+		return fmt.Errorf("dst or src node does not exist")
+	}
 	dstClient := r.GetRedisClientForNode(ctx, dst_node.NodeID, redisCluster)
 	srcClient := r.GetRedisClientForNode(ctx, src_node.NodeID, redisCluster)
 	var err error
@@ -273,19 +276,28 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 	if len(readyNodes) < len(slotsMap) {
 		return fmt.Errorf("Got %d readyNodes, but need %d readyNodes to satisfy slots map allocation.", len(readyNodes), len(slotsMap))
 	}
+	r.Log.Info("RebalanceCluster", "nodes", readyNodes, "slotsMap", slotsMap)
 
 	// iterate over slots map
 	for _, slotRange := range clusterSlots {
 		for slot := slotRange.Start; slot <= slotRange.End; slot++ {
-			destNodeId, err := r.GetSlotOwnerCandidate(slot, redisCluster)
+			dstNodeId, err := r.GetSlotOwnerCandidate(slot, redisCluster)
 			if err != nil {
 				return err
 			}
 			srcNodeId := slotRange.Nodes[0].ID
-			if srcNodeId == destNodeId {
+			if srcNodeId == dstNodeId {
 				continue
 			}
-			err = r.MoveSlot(ctx, slot, redisCluster.Status.Nodes[srcNodeId], redisCluster.Status.Nodes[destNodeId], redisCluster)
+			srcNode := readyNodes[srcNodeId]
+			dstNode := readyNodes[dstNodeId]
+			if srcNode == nil {
+				return fmt.Errorf("srcNode with nodeid %s not found in the list of nodes", srcNodeId)
+			}
+			if srcNode == nil {
+				return fmt.Errorf("srcNode with nodeid %s not found in the list of nodes", dstNodeId)
+			}
+			err = r.MoveSlot(ctx, slot, srcNode, dstNode, redisCluster)
 			if err != nil {
 				return err
 			}

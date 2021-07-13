@@ -152,7 +152,10 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	r.Log.Info("ReconcileClusterObject", "state", redisCluster.Status.Status)
 	// Update slots ranges
 	redisCluster.Status.Slots = r.GetSlotsRanges(redisCluster.Spec.Replicas)
-
+	redisCluster.Status.Nodes, err = r.GetReadyNodes(ctx, redisCluster)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	requeue := false
 	switch redisCluster.Status.Status {
 	case v1alpha1.StatusConfiguring:
@@ -180,15 +183,12 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		r.UpdateScalingStatus(ctx, redisCluster)
 		requeue = true
 	case v1alpha1.StatusError:
+		// todo: try to recover from error. Check configuration status?
 		r.Recorder.Event(redisCluster, "Warning", "ClusterError", "Cluster error recorded.")
 	default:
 		r.CheckConfigurationStatus(ctx, redisCluster)
 	}
 
-	redisCluster.Status.Nodes, err = r.GetReadyNodes(ctx, redisCluster)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
 	var update_err error
 	if !reflect.DeepEqual(redisCluster.Status, currentStatus) {
 		update_err = r.UpdateClusterStatus(ctx, redisCluster)
