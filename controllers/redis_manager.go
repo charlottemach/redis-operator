@@ -144,6 +144,11 @@ func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, slot int, src_nod
 	srcClient := r.GetRedisClientForNode(ctx, src_node.NodeID, redisCluster)
 	var err error
 
+	err = dstClient.Do(ctx, "cluster", "setslot", slot, "importing", src_node.NodeID).Err()
+	if err != nil {
+		return err
+	}
+
 	err = srcClient.Do(ctx, "cluster", "setslot", slot, "migrating", dst_node.NodeID).Err()
 	if err != nil {
 		return err
@@ -151,23 +156,30 @@ func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, slot int, src_nod
 
 	// todo: batching
 	for i := 1; ; i++ {
-		keysInSlot := srcClient.ClusterGetKeysInSlot(ctx, slot, 1000).Val()
+		keysInSlot := srcClient.ClusterGetKeysInSlot(ctx, slot, 100).Val()
 		if len(keysInSlot) == 0 {
 			break
+		} else {
+			if slot%100 == 0 {
+				r.Log.Info("MoveSlot - found keys in slot", "slot", slot, "count", len(keysInSlot))
+			}
 		}
 		for _, key := range keysInSlot {
-			err = dstClient.Migrate(ctx, dst_node.IP, strconv.Itoa(redis.RedisCommPort), key, 0, 30*time.Second).Err()
+			err = srcClient.Migrate(ctx, dst_node.IP, strconv.Itoa(redis.RedisCommPort), key, 0, 30*time.Second).Err()
 			if err != nil {
+				r.Log.Error(err, "Migrate failed", "key", key, "keysinslot", keysInSlot)
 				return err
 			}
 		}
 	}
 	err = srcClient.Do(ctx, "cluster", "setslot", slot, "node", dst_node.NodeID).Err()
 	if err != nil {
+		r.Log.Error(err, "Setslot failed", "slot", slot, "node", dst_node)
 		return err
 	}
 	err = dstClient.Do(ctx, "cluster", "setslot", slot, "node", dst_node.NodeID).Err()
 	if err != nil {
+		r.Log.Error(err, "Setslot failed", "slot", slot, "node", dst_node)
 		return err
 	}
 	return nil
@@ -297,10 +309,7 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 			if srcNode == nil {
 				return fmt.Errorf("srcNode with nodeid %s not found in the list of nodes", dstNodeId)
 			}
-			err = r.MoveSlot(ctx, slot, srcNode, dstNode, redisCluster)
-			if err != nil {
-				return err
-			}
+			r.MoveSlot(ctx, slot, srcNode, dstNode, redisCluster)
 		}
 	}
 
@@ -341,6 +350,7 @@ func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[stri
 }
 
 func (r *RedisClusterReconciler) GetRedisClient(ctx context.Context, ip string, secret string) *redisclient.Client {
+	redisclient.NewClusterClient(&redisclient.ClusterOptions{})
 	rdb := redisclient.NewClient(&redisclient.Options{
 		Addr:     fmt.Sprintf("%s:%d", ip, redis.RedisCommPort),
 		Password: secret,
