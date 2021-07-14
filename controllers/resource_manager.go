@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -153,15 +154,20 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	// Update slots ranges
 	redisCluster.Status.Slots = r.GetSlotsRanges(redisCluster.Spec.Replicas)
 	redisCluster.Status.Nodes, err = r.GetReadyNodes(ctx, redisCluster)
+
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	requeue := false
 	switch redisCluster.Status.Status {
 	case v1alpha1.StatusConfiguring:
-		r.ConfigureRedisCluster(ctx, redisCluster)
-		r.CheckConfigurationStatus(ctx, redisCluster)
 		requeue = true
+		err := r.ConfigureRedisCluster(ctx, redisCluster)
+		if err != nil {
+			r.Log.Error(err, "Error when configuring cluster. Will retry again.")
+			break
+		}
+		r.CheckConfigurationStatus(ctx, redisCluster)
 	case v1alpha1.StatusReady:
 		r.UpdateScalingStatus(ctx, redisCluster)
 	case v1alpha1.StatusScalingDown:
@@ -185,6 +191,10 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	case v1alpha1.StatusError:
 		// todo: try to recover from error. Check configuration status?
 		r.Recorder.Event(redisCluster, "Warning", "ClusterError", "Cluster error recorded.")
+		err := r.ScaleCluster(ctx, redisCluster)
+		if err == nil {
+			r.UpdateScalingStatus(ctx, redisCluster)
+		}
 	default:
 		r.CheckConfigurationStatus(ctx, redisCluster)
 	}
@@ -206,19 +216,23 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 	r.Log.Info("Cluster info", "clusterinfo", clusterInfo)
 	state := clusterInfo["cluster_state"]
 	slots_ok := clusterInfo["cluster_slots_ok"]
+	known_nodes, _ := strconv.Atoi(clusterInfo["cluster_known_nodes"])
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
-	if state == "ok" && slots_ok == "16384" {
+	r.Log.Info("Cluster state check", "cluster_state", state, "cluster_slots_ok", slots_ok, "status", redisCluster.Status.Status)
+	if len(readyNodes) != known_nodes {
+		r.Log.Info("Not all nodes yet created")
+		return
+	}
+	if state == "ok" && slots_ok == strconv.Itoa(redis.TotalClusterSlots) {
 		redisCluster.Status.Status = v1alpha1.StatusReady
 	}
-	if slots_ok == "0" {
+	if slots_ok == "0" || slots_ok == "" {
 		if len(readyNodes) == int(redisCluster.Spec.Replicas) {
 			redisCluster.Status.Status = v1alpha1.StatusConfiguring
 		} else {
 			redisCluster.Status.Status = v1alpha1.StatusInitializing
 		}
 	}
-
-	r.Log.Info("Cluster state check", "cluster_state", state, "cluster_slots_ok", slots_ok, "status", redisCluster.Status.Status)
 }
 
 // TODO: swap return values

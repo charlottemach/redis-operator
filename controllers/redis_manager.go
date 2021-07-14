@@ -55,7 +55,10 @@ func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, node
 func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	r.Log.Info("ConfigureRedisCluster", "readyNodes", readyNodes, "equality", reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes))
-	r.ClusterMeet(ctx, readyNodes, redisCluster)
+	err := r.ClusterMeet(ctx, readyNodes, redisCluster)
+	if err != nil {
+		return err
+	}
 	r.Recorder.Event(redisCluster, "Normal", "ClusterMeet", "Redis cluster meet completed.")
 
 	r.AssignSlots(ctx, readyNodes, redisCluster)
@@ -112,12 +115,9 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 		err = r.RebalanceCluster(ctx, redisCluster)
 		if err != nil {
 			r.Log.Error(err, "Issues with rebalancing cluster when scaling down")
+			return err
 		}
 		r.ForgetUnnecessaryNodes(ctx, redisCluster)
-	}
-
-	if redisCluster.Spec.Replicas > currSsetReplicas {
-		redisCluster.Status.Status = v1alpha1.StatusScalingUp
 	}
 
 	if int(redisCluster.Spec.Replicas) == len(readyNodes) {
@@ -129,6 +129,7 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 			return err
 		}
 	}
+
 	newSize := redisCluster.Spec.Replicas
 	sset.Spec.Replicas = &newSize
 	r.Log.Info("ScaleCluster - updating statefulset replicas", "newsize", newSize)
@@ -165,7 +166,8 @@ func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, slot int, src_nod
 			}
 		}
 		for _, key := range keysInSlot {
-			err = srcClient.Migrate(ctx, dst_node.IP, strconv.Itoa(redis.RedisCommPort), key, 0, 30*time.Second).Err()
+			// todo: batch migrate
+			err = srcClient.Migrate(ctx, dst_node.IP, strconv.Itoa(redis.RedisCommPort), key, 0, 1*time.Second).Err()
 			if err != nil {
 				r.Log.Error(err, "Migrate failed", "key", key, "keysinslot", keysInSlot)
 				return err
@@ -193,7 +195,7 @@ func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
 	return false
 }
 
-func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) {
+func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
 	r.Log.Info("ClusterMeet", "nodes", nodes)
 	var rdb *redisclient.Client
 	var alphaNode *v1alpha1.RedisNode
@@ -208,8 +210,10 @@ func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[stri
 		err := rdb.ClusterMeet(ctx, node.IP, strconv.Itoa(redis.RedisCommPort)).Err()
 		if err != nil {
 			r.Log.Error(err, "clustermeet failed", "nodes", node)
+			return err
 		}
 	}
+	return nil
 }
 
 func (r *RedisClusterReconciler) GetSlotsRanges(nodes int32) []*v1alpha1.SlotRange {
@@ -277,6 +281,7 @@ func (r *RedisClusterReconciler) ForgetUnnecessaryNodes(ctx context.Context, red
 }
 
 func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
+	var err error
 	// get current slots assignment
 	clusterSlots := r.GetClusterSlotConfiguration(ctx, redisCluster)
 	// get slots map source from the cluster status field
@@ -309,11 +314,12 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 			if srcNode == nil {
 				return fmt.Errorf("srcNode with nodeid %s not found in the list of nodes", dstNodeId)
 			}
-			r.MoveSlot(ctx, slot, srcNode, dstNode, redisCluster)
+
+			err = r.MoveSlot(ctx, slot, srcNode, dstNode, redisCluster)
 		}
 	}
 
-	return nil
+	return err
 }
 
 func (r *RedisClusterReconciler) GetSlotOwnerCandidate(slot int, redisCluster *v1alpha1.RedisCluster) (string, error) {
