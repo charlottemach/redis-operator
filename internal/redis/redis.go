@@ -20,7 +20,7 @@ const RedisCommPort = 6379
 const RedisGossPort = 16379
 const RedisClusterLabel = "redis-cluster-name"
 
-const totalClusterSlots = 16384
+const TotalClusterSlots = 16384
 
 type NodesSlots struct {
 	Start int
@@ -246,7 +246,7 @@ func slotsPerNode(numOfNodes int, slots int) (int, int) {
 func SplitNodeSlots(nodesTotal int) []*NodesSlots {
 	nodesSlots := []*NodesSlots{}
 	numOfNodes := nodesTotal
-	slotsNode, resto := slotsPerNode(numOfNodes, totalClusterSlots)
+	slotsNode, resto := slotsPerNode(numOfNodes, TotalClusterSlots)
 	slotsAsigment := []string{}
 	for i := 0; i < numOfNodes; i++ {
 		if i == 0 {
@@ -299,4 +299,16 @@ func ConvertRedisMemToMbytes(maxMemory string) (int, error) {
 		maxMemoryInt = maxMemoryInt / 1024 / 1024
 	}
 	return maxMemoryInt, err
+}
+
+func GetClusterInfo(state string) map[string]string {
+	lines := strings.Split(strings.ReplaceAll(state, "\r\n", "\n"), "\n")
+	clusterstate := make(map[string]string)
+	for _, line := range lines {
+		kvmap := strings.Split(line, ":")
+		if len(kvmap) == 2 {
+			clusterstate[kvmap[0]] = kvmap[1]
+		}
+	}
+	return clusterstate
 }

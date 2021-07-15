@@ -2,10 +2,9 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: controller-manager
-  namespace: system
 spec:
   template:
     spec:
       containers:
       - name: manager
-        image: ghcr.io/containersolutions/redis-operator:sha-e539c67
+        image: ghcr.io/containersolutions/redis-operator:ci
