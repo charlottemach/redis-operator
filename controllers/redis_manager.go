@@ -416,6 +416,7 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 	)
 
 	r.Client.List(ctx, allPods, &client.ListOptions{
+		Namespace:     redisCluster.Namespace,
 		LabelSelector: labelSelector,
 	})
 	readyNodes := make(map[string]*v1alpha1.RedisNode, 0)
