@@ -213,16 +213,10 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, redisCluster *v1alpha1.RedisCluster) {
 	clusterInfo := r.GetClusterInfo(ctx, redisCluster)
-	r.Log.Info("Cluster info", "clusterinfo", clusterInfo)
 	state := clusterInfo["cluster_state"]
 	slots_ok := clusterInfo["cluster_slots_ok"]
-	known_nodes, _ := strconv.Atoi(clusterInfo["cluster_known_nodes"])
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
-	r.Log.Info("Cluster state check", "cluster_state", state, "cluster_slots_ok", slots_ok, "status", redisCluster.Status.Status, "known_nodes", known_nodes)
-	if len(readyNodes) != known_nodes {
-		r.Log.Info("Not all nodes yet created")
-		return
-	}
+	r.Log.Info("CheckConfigurationStatus", "cluster_state", state, "cluster_slots_ok", slots_ok, "status", redisCluster.Status.Status, "clusterinfo", clusterInfo)
 	if state == "ok" && slots_ok == strconv.Itoa(redis.TotalClusterSlots) {
 		redisCluster.Status.Status = v1alpha1.StatusReady
 	}
