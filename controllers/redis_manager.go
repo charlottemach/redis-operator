@@ -390,16 +390,17 @@ func (r *RedisClusterReconciler) GetRedisClient(ctx context.Context, ip string, 
 	return rdb
 }
 
-func (r *RedisClusterReconciler) GetRedisClusterPods(ctx context.Context, clusterName string) *corev1.PodList {
+func (r *RedisClusterReconciler) GetRedisClusterPods(ctx context.Context, redisCluster *v1alpha1.RedisCluster) *corev1.PodList {
 	allPods := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(
 		map[string]string{
-			redis.RedisClusterLabel: clusterName,
+			redis.RedisClusterLabel: redisCluster.Name,
 			"app":                   "redis",
 		},
 	)
 
 	r.Client.List(ctx, allPods, &client.ListOptions{
+		Namespace:     redisCluster.Namespace,
 		LabelSelector: labelSelector,
 	})
 

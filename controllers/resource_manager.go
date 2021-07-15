@@ -372,7 +372,7 @@ func (r *RedisClusterReconciler) GetClusterInfo(ctx context.Context, redisCluste
 		r.Log.Info("No ready nodes available on the cluster.", "clusterinfo", map[string]string{})
 		return map[string]string{}
 	}
-	nodes := r.GetRedisClusterPods(ctx, redisCluster.Name)
+	nodes := r.GetRedisClusterPods(ctx, redisCluster)
 	if len(nodes.Items) == 0 {
 		return nil
 	}
@@ -380,7 +380,6 @@ func (r *RedisClusterReconciler) GetClusterInfo(ctx context.Context, redisCluste
 	rdb := r.GetRedisClient(ctx, nodes.Items[0].Status.PodIP, secret)
 	info, _ := rdb.ClusterInfo(ctx).Result()
 	parsedClusterInfo := redis.GetClusterInfo(info)
-	r.Log.Info("GetClusterInfo", "parsedClusterInfo", parsedClusterInfo, "rawClusterInfo", info)
 	return parsedClusterInfo
 }
 
