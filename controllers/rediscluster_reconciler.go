@@ -25,6 +25,7 @@ import (
 	"context"
 
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -53,10 +54,11 @@ import (
 // RedisClusterReconciler reconciles a RedisCluster object
 type RedisClusterReconciler struct {
 	client.Client
-	Log        logr.Logger
-	Scheme     *runtime.Scheme
-	Recorder   record.EventRecorder
-	Finalizers []finalizer.Finalizer
+	Log                     logr.Logger
+	Scheme                  *runtime.Scheme
+	Recorder                record.EventRecorder
+	Finalizers              []finalizer.Finalizer
+	MaxConcurrentReconciles int
 }
 
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters,verbs=get;list;watch;create;update;patch;delete
@@ -90,6 +92,7 @@ func (r *RedisClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&v1alpha1.RedisCluster{}).
 		Watches(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForObject{}, builder.WithPredicates(r.PreFilter())).
 		Owns(&v1.StatefulSet{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: 10, Log: r.Log}).
 		Complete(r)
 }
 
