@@ -218,7 +218,7 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 	slots_ok := clusterInfo["cluster_slots_ok"]
 	known_nodes, _ := strconv.Atoi(clusterInfo["cluster_known_nodes"])
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
-	r.Log.Info("Cluster state check", "cluster_state", state, "cluster_slots_ok", slots_ok, "status", redisCluster.Status.Status, "known_nodes", known_nodes, "known_nodes_raw", clusterInfo["cluster_known_nodes"])
+	r.Log.Info("Cluster state check", "cluster_state", state, "cluster_slots_ok", slots_ok, "status", redisCluster.Status.Status, "known_nodes", known_nodes)
 	if len(readyNodes) != known_nodes {
 		r.Log.Info("Not all nodes yet created")
 		return
@@ -379,6 +379,7 @@ func (r *RedisClusterReconciler) GetClusterInfo(ctx context.Context, redisCluste
 	secret, _ := r.GetRedisSecret(redisCluster)
 	rdb := r.GetRedisClient(ctx, nodes.Items[0].Status.PodIP, secret)
 	info, _ := rdb.ClusterInfo(ctx).Result()
+	r.Log.Info("GetClusterInfo", "nodes", len(nodes.Items), "ip", nodes.Items[0].Status.PodIP, "info", info)
 	parsedClusterInfo := redis.GetClusterInfo(info)
 	return parsedClusterInfo
 }
