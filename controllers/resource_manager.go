@@ -45,7 +45,7 @@ func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, o cl
 		r.Log.Info("ConfigureRedisCluster - secret not found", "name", redisCluster.GetName())
 		return err
 	}
-	readyNodes := r.GetReadyNodes(ctx, redisCluster.GetName())
+	readyNodes := r.GetReadyNodes(ctx, redisCluster)
 	if !reflect.DeepEqual(readyNodes, redisCluster.Status.Nodes) {
 		redisCluster.Status.Nodes = readyNodes
 		err = r.Status().Update(ctx, redisCluster)
@@ -111,16 +111,17 @@ func (r *RedisClusterReconciler) GetRedisClient(ctx context.Context, ip string, 
 	return rdb
 }
 
-func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, clusterName string) []v1alpha1.RedisNode {
+func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster *v1alpha1.RedisCluster) []v1alpha1.RedisNode {
 	allPods := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(
 		map[string]string{
-			redis.RedisClusterLabel: clusterName,
+			redis.RedisClusterLabel: redisCluster.Name,
 			"app":                   "redis",
 		},
 	)
 
 	r.Client.List(ctx, allPods, &client.ListOptions{
+		Namespace:     redisCluster.Namespace,
 		LabelSelector: labelSelector,
 	})
 	readyNodes := make([]v1alpha1.RedisNode, 0)
@@ -150,7 +151,7 @@ func (r *RedisClusterReconciler) ReapplyConfiguration(ctx context.Context, o cli
 		r.Log.Error(err, "Can't find internal resource - RedisCluster")
 		return err
 	}
-	readyNodes := r.GetReadyNodes(ctx, redisCluster.GetName())
+	readyNodes := r.GetReadyNodes(ctx, redisCluster)
 	secret, _ := r.GetRedisSecret(o)
 	r.Log.Info("Secret and ready nodes", "readyNodes", readyNodes)
 	i := 0
