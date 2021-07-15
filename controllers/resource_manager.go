@@ -213,16 +213,10 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 
 func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, redisCluster *v1alpha1.RedisCluster) {
 	clusterInfo := r.GetClusterInfo(ctx, redisCluster)
-	r.Log.Info("Cluster info", "clusterinfo", clusterInfo)
 	state := clusterInfo["cluster_state"]
 	slots_ok := clusterInfo["cluster_slots_ok"]
-	known_nodes, _ := strconv.Atoi(clusterInfo["cluster_known_nodes"])
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
-	r.Log.Info("Cluster state check", "cluster_state", state, "cluster_slots_ok", slots_ok, "status", redisCluster.Status.Status, "known_nodes", known_nodes, "known_nodes_raw", clusterInfo["cluster_known_nodes"])
-	if len(readyNodes) != known_nodes {
-		r.Log.Info("Not all nodes yet created")
-		return
-	}
+	r.Log.Info("CheckConfigurationStatus", "cluster_state", state, "cluster_slots_ok", slots_ok, "status", redisCluster.Status.Status, "clusterinfo", clusterInfo)
 	if state == "ok" && slots_ok == strconv.Itoa(redis.TotalClusterSlots) {
 		redisCluster.Status.Status = v1alpha1.StatusReady
 	}
@@ -372,15 +366,15 @@ func (r *RedisClusterReconciler) GetClusterInfo(ctx context.Context, redisCluste
 		r.Log.Info("No ready nodes available on the cluster.", "clusterinfo", map[string]string{})
 		return map[string]string{}
 	}
-	nodes := r.GetRedisClusterPods(ctx, redisCluster.Name)
+	nodes := r.GetRedisClusterPods(ctx, redisCluster)
 	if len(nodes.Items) == 0 {
 		return nil
 	}
 	secret, _ := r.GetRedisSecret(redisCluster)
 	rdb := r.GetRedisClient(ctx, nodes.Items[0].Status.PodIP, secret)
 	info, _ := rdb.ClusterInfo(ctx).Result()
+	r.Log.Info("GetClusterInfo", "nodes", len(nodes.Items), "ip", nodes.Items[0].Status.PodIP, "info", info)
 	parsedClusterInfo := redis.GetClusterInfo(info)
-	r.Log.Info("GetClusterInfo", "parsedClusterInfo", parsedClusterInfo, "rawClusterInfo", info)
 	return parsedClusterInfo
 }
 
