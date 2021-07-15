@@ -303,7 +303,7 @@ func ConvertRedisMemToMbytes(maxMemory string) (int, error) {
 
 func GetClusterInfo(state string) map[string]string {
 	lines := strings.Split(strings.ReplaceAll(state, "\r\n", "\n"), "\n")
-	clusterstate := map[string]string{}
+	clusterstate := make(map[string]string)
 	for _, line := range lines {
 		kvmap := strings.Split(line, ":")
 		if len(kvmap) == 2 {

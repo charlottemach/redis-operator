@@ -41,6 +41,19 @@ type RedisClient struct {
 
 var redisClients map[string]*RedisClient = make(map[string]*RedisClient)
 
+func (r *RedisClusterReconciler) RefreshRedisClients(ctx context.Context, redisCluster *v1alpha1.RedisCluster) {
+	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
+	for nodeId, node := range nodes {
+		secret, _ := r.GetRedisSecret(redisCluster)
+		err := r.GetRedisClient(ctx, node.IP, secret).Ping(ctx).Err()
+		if err != nil {
+			r.Log.Info("RefreshRedisClients - Redis client for node is errorring", "node", nodeId, "error", err)
+			r.GetRedisClient(ctx, node.IP, secret).Close()
+			redisClients[nodeId] = nil
+		}
+	}
+}
+
 func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, nodeId string, redisCluster *v1alpha1.RedisCluster) *redisclient.Client {
 	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	if redisClients[nodeId] == nil {
@@ -50,6 +63,14 @@ func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, node
 	}
 
 	return redisClients[nodeId].RedisClient
+}
+
+func (r *RedisClusterReconciler) RemoveRedisClientForNode(nodeId string, ctx context.Context, redisCluster *v1alpha1.RedisCluster) {
+	if redisClients[nodeId] == nil {
+		return
+	}
+	redisClients[nodeId].RedisClient.Close()
+	redisClients[nodeId] = nil
 }
 
 func (r *RedisClusterReconciler) ConfigureRedisCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
@@ -276,7 +297,11 @@ func (r *RedisClusterReconciler) ForgetUnnecessaryNodes(ctx context.Context, red
 			if err != nil {
 				r.Log.Error(err, "Node forget failed", "target", remainingNode, "forgottenNode", forgottenNode)
 			}
+
 		}
+	}
+	for _, node := range overstayedTheirWelcomeNodes {
+		r.RemoveRedisClientForNode(node.NodeID, ctx, redisCluster)
 	}
 }
 

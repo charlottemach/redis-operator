@@ -73,7 +73,7 @@ func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	r.Log.Info("RedisCluster reconciler called", "name", req.Name, "ns", req.Namespace)
 	redisCluster := &v1alpha1.RedisCluster{}
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
-
+	r.RefreshRedisClients(ctx, redisCluster)
 	if err == nil {
 		r.Log.Info("Found RedisCluster", "name", redisCluster.GetName(), "GVK", redisCluster.GroupVersionKind().String())
 		return r.ReconcileClusterObject(ctx, req, redisCluster)
