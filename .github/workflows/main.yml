@@ -77,8 +77,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: ghcr.io/containersolutions/redis-operator
-          tag-custom: ci
-          tags:
+          tags: |
             type=sha,format=long
             type=semver,pattern={{version}}
 
