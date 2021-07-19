@@ -48,9 +48,9 @@ jobs:
         run: |
           make test
 
-      - name: Deleting KinD cluster
-        if: ${{ always() }}
-        run: kind delete cluster
+      # - name: Deleting KinD cluster
+      #   if: ${{ always() }}
+      #   run: kind delete cluster
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -74,16 +74,13 @@ jobs:
 
       - name: Docker meta
         id: docker_meta
-        uses: crazy-max/ghaction-docker-meta@v1
+        uses: docker/metadata-action@v3
         with:
           images: ghcr.io/containersolutions/redis-operator
-          labels:
-            org.opencontainers.image.source="https://github.com/ContainerSolutions/redis-operator"
-          tag-sha: true
           tag-custom: ci
-          tag-semver: |
-            {{version}}
-            {{major}}.{{minor}}
+          tags:
+            type=sha,format=long
+            type=semver,pattern={{version}}
 
       - name: Build and push
         uses: docker/build-push-action@v2
@@ -92,3 +89,22 @@ jobs:
           tags: ${{ steps.docker_meta.outputs.tags }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
+
+      - name: Integration test
+        description: replace image and namespace
+        run: |
+          make IMG=${{github.sha}} NAMESPACE=test-${{github.sha}} int-test
+          
+      - name: Integration test
+        uses: steebchen/kubectl@v2.0.0
+        with: # defaults to latest kubectl binary version
+          config: ${{ secrets.KUBECONFIG }}
+          command: kustomize config/tests
+
+      - name: verify deployment
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBECONFIG }}
+          version: v1.21.0 # specify kubectl binary version explicitly
+          command: get rdcl -n test-${{github.sha}}
+  
