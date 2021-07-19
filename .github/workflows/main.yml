@@ -105,9 +105,18 @@ jobs:
           config: ${{ secrets.KUBECONFIG }}
           command: apply -f config/test/tests.yaml
 
+      - name: Sleep for 10 seconds
+        run: sleep 10s
+        shell: bash
+
       - name: Verify test manifests rdcl deployment
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBECONFIG }}
           command: get rdcl -n test-${{github.sha}}
-  
+
+      - name: Delete test manifests
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBECONFIG }}
+          command: delete -f config/test/tests.yaml
