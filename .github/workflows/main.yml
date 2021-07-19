@@ -90,21 +90,25 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
 
-      - name: Integration test
-        description: replace image and namespace
+      - name: Replace variables
         run: |
           make IMG=${{github.sha}} NAMESPACE=test-${{github.sha}} int-test
-          
-      - name: Integration test
-        uses: steebchen/kubectl@v2.0.0
-        with: # defaults to latest kubectl binary version
-          config: ${{ secrets.KUBECONFIG }}
-          command: kustomize config/tests
 
-      - name: verify deployment
+      - name: Generate test manifests
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBECONFIG }}
-          version: v1.21.0 # specify kubectl binary version explicitly
+          command: kustomize config/tests > config/test/tests.yaml
+
+      - name: Apply test manifests
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBECONFIG }}
+          command: apply config/test/tests.yaml
+
+      - name: Verify test manifests rdcl deployment
+        uses: steebchen/kubectl@v2.0.0
+        with:
+          config: ${{ secrets.KUBECONFIG }}
           command: get rdcl -n test-${{github.sha}}
   
