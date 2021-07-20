@@ -10,7 +10,7 @@ metadata:
     app: redis-graph
     team: team-a
 spec:
-  replicas: 3
+  replicas: 1
   storage: 500Mi
   image: redislabs/redisgraph:2.4.1
   config: |
