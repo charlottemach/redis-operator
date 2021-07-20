@@ -50,7 +50,8 @@ jobs:
           curl -sLO "https://dl.k8s.io/release/$version/bin/linux/amd64/kubectl" -o kubectl
           chmod +x kubectl
           chmod +x kubectl && sudo mv kubectl /usr/local/bin
-          echo "KUBECONFIG=$(echo '${{ env.KUBECONFIG_B64 }}' | base64 -d)" >> $GITHUB_ENV
+          echo '${{ env.KUBECONFIG_B64 }}' | base64 -d > /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
  
       - name: Run tests for Kubernetes
         run: |
@@ -116,10 +117,8 @@ jobs:
           echo ::set-output name=status::$(kubectl get rediscluster -n test-${{github.sha}} --template='{{.status.status}}')
 
       - name: Delete test manifests
-        uses: steebchen/kubectl@v2.0.0
-        with:
-          config: ${{ secrets.KUBECONFIG }}
-          command: delete -f config/test/tests.yaml
+        run: |
+          kubectl delete -f config/test/tests.yaml
 
       - name: Sleep for 15 seconds
         run: sleep 15s
