@@ -113,7 +113,9 @@ jobs:
       - name: Verify test manifests rdcl deployment
         id: rdcl-init
         run: |
-          echo ::set-output name=status::$(kubectl get rediscluster -n test-${{github.sha}} --template='{{.status.status}}')
+          status=$(kubectl get rediscluster -n test-${{github.sha}} --template='{{.status.status}}')
+          echo "rdcl status: $status"
+          echo ::set-output name=status::$status
 
       - name: Delete test manifests
         run: |
@@ -125,12 +127,14 @@ jobs:
       - name: Verify test manifests rdcl deployment
         id: rdcl-ready
         run: |
-          echo ::set-output name=status::$(kubectl get rediscluster -n test-${{github.sha}} --template='{{.status.status}}')
+          status=$(kubectl get rediscluster -n test-${{github.sha}} --template='{{.status.status}}')
+          echo "rdcl status: $status"
+          echo ::set-output name=status::$status
 
-      - name: Check rdcl status
+      - name: Check rdcl-init status
         if: ${{ steps.rdcl-init.status != 'Initializing' }}
         run: exit 1
 
-      - name: Check rdcl status
+      - name: Check rdcl-ready status
         if: ${{ steps.rdcl-ready.status != 'Ready' }}
         run: exit 1
