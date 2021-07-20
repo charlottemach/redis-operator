@@ -99,9 +99,8 @@ jobs:
           make IMG=sha-${{github.sha}} NAMESPACE=test-${{github.sha}} int-test
 
       - name: Generate test manifests
-        with:
-          config: ${{ secrets.KUBECONFIG }}
-          command: kubectl kustomize config/test > config/test/tests.yaml
+        run: |
+          kubectl kustomize config/test > config/test/tests.yaml
 
       - name: Apply test manifests
         run: |
