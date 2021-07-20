@@ -47,7 +47,7 @@ jobs:
 
       - name: Setup kubectl
         run: |
-          curl -sLO "https://dl.k8s.io/release/$version/bin/linux/amd64/kubectl" -o kubectl
+          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" -o kubectl
           chmod +x kubectl
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
           echo '${{ env.KUBECONFIG_B64 }}' | base64 -d > /tmp/kubeconfig
