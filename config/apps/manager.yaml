@@ -21,12 +21,11 @@ spec:
         - /manager
         args:
         - --leader-elect
+        - --max-concurrent-reconciles
+        - 1
         image: ghcr.io/containersolutions/redis-operator:0.3.0
         imagePullPolicy: Always
         name: manager
-        args:
-          - --max-concurrent-reconciles
-          - 1
         securityContext:
           allowPrivilegeEscalation: false
         livenessProbe:
