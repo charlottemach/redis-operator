@@ -49,7 +49,7 @@ patchesStrategicMerge:
 bases:
 - ../apps
 - ../ops/rbac
-- ../ops/crd
+#- ../ops/crd
 - ../samples
 
 namespace: default

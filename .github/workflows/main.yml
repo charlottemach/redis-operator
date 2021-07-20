@@ -104,6 +104,7 @@ jobs:
 
       - name: Apply test manifests
         run: |
+          kubectl kustomize config/ops/crd/ | kubectl apply -f -
           kubectl apply -f config/test/tests.yaml
 
       - name: Sleep for 5 seconds
