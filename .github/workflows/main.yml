@@ -120,16 +120,16 @@ jobs:
       - name: Sleep for 15 seconds
         run: sleep 15s
 
-      - name: Delete test manifests
-        run: |
-          kubectl delete -f config/test/tests.yaml
-
       - name: Verify test manifests rdcl deployment
         id: rdcl-ready
         run: |
           status=$(kubectl get rediscluster -n test-${{github.sha}} --template='{{.status.status}}')
           echo "rdcl status: $status"
           echo ::set-output name=status::$status
+
+      - name: Delete test manifests
+        run: |
+          kubectl delete -f config/test/tests.yaml
 
       - name: Check rdcl-init status
         if: ${{ steps.rdcl-init.status != 'Initializing' }}
