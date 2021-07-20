@@ -43,13 +43,13 @@ jobs:
           arch=$(go env GOARCH)
           curl -L https://go.kubebuilder.io/dl/2.3.1/${os}/${arch} | tar -xz -C /tmp/
           sudo mv /tmp/kubebuilder_2.3.1_${os}_${arch} /usr/local/kubebuilder
-          export PATH=$PATH:/usr/local/kubebuilder/bin
+          export PATH=$PATH:/usr/local/kubebuilder/bin:/usr/local/bin
 
       - name: Setup kubectl
         run: |
           curl -sLO "https://dl.k8s.io/release/$version/bin/linux/amd64/kubectl" -o kubectl
           chmod +x kubectl
-          chmod +x kubectl && sudo mv kubectl /usr/local/bin
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
           echo '${{ env.KUBECONFIG_B64 }}' | base64 -d > /tmp/kubeconfig
           echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
  
