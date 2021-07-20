@@ -43,7 +43,7 @@ jobs:
           arch=$(go env GOARCH)
           curl -L https://go.kubebuilder.io/dl/2.3.1/${os}/${arch} | tar -xz -C /tmp/
           sudo mv /tmp/kubebuilder_2.3.1_${os}_${arch} /usr/local/kubebuilder
-          export PATH=$PATH:/usr/local/kubebuilder/bin:/usr/local/bin
+          export PATH=$PATH:/usr/local/kubebuilder/bin
 
       - name: Setup kubectl
         run: |
@@ -99,7 +99,6 @@ jobs:
           make IMG=sha-${{github.sha}} NAMESPACE=test-${{github.sha}} int-test
 
       - name: Generate test manifests
-        uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBECONFIG }}
           command: kubectl kustomize config/test > config/test/tests.yaml
