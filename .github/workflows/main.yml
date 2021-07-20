@@ -102,7 +102,7 @@ jobs:
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBECONFIG }}
-          command: kustomize config/test > config/test/tests.yaml
+          command: kubectl kustomize config/test > config/test/tests.yaml
 
       - name: Apply test manifests
         run: |
