@@ -130,9 +130,9 @@ jobs:
           echo ::set-output name=status::$(kubectl get rediscluster -n test-${{github.sha}} --template='{{.status.status}}')
 
       - name: Check rdcl status
-        if: ${{ steps.rdcl-init.status != "Initializing" }}
+        if: ${{ steps.rdcl-init.status != 'Initializing' }}
         run: exit 1
 
       - name: Check rdcl status
-        if: ${{ steps.rdcl-ready.status != "Ready" }}
+        if: ${{ steps.rdcl-ready.status != 'Ready' }}
         run: exit 1
