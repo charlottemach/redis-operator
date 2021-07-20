@@ -11,10 +11,10 @@ metadata:
     team: team-a
 spec:
   replicas: 3
-  storage: 1Gi
+  storage: 500mb
   image: redislabs/redisgraph:2.4.1
   config: |
-    maxmemory 800mb
+    maxmemory 400mb
     maxmemory-samples 5
     maxmemory-policy allkeys-lru
     appendonly yes

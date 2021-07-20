@@ -14,6 +14,7 @@ env:
   CR_PAT: ${{ secrets.CR_PAT }}
   DH_USER: ${{ secrets.DOCKERHUB_USER }}
   DH_TOKEN: ${{ secrets.DOCKERHUB_PASS }}
+  KUBECONFIG_B64: ${{ secrets.KUBECONFIG }}
 
 jobs:
   tests-and-build:
@@ -43,14 +44,17 @@ jobs:
           curl -L https://go.kubebuilder.io/dl/2.3.1/${os}/${arch} | tar -xz -C /tmp/
           sudo mv /tmp/kubebuilder_2.3.1_${os}_${arch} /usr/local/kubebuilder
           export PATH=$PATH:/usr/local/kubebuilder/bin
+
+      - name: Setup kubectl
+        run: |
+          curl -sLO "https://dl.k8s.io/release/$version/bin/linux/amd64/kubectl" -o kubectl
+          chmod +x kubectl
+          mv kubectl /usr/local/bin
+          echo "KUBECONFIG=$(echo '${{ env.KUBECONFIG_B64 }}' | base64 -d)" >> $GITHUB_ENV
  
       - name: Run tests for Kubernetes
         run: |
           make test
-
-      # - name: Deleting KinD cluster
-      #   if: ${{ always() }}
-      #   run: kind delete cluster
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -100,23 +104,35 @@ jobs:
           command: kustomize config/test > config/test/tests.yaml
 
       - name: Apply test manifests
-        uses: steebchen/kubectl@v2.0.0
-        with:
-          config: ${{ secrets.KUBECONFIG }}
-          command: apply -f config/test/tests.yaml
+        run: |
+          kubectl apply -f config/test/tests.yaml
 
-      - name: Sleep for 10 seconds
-        run: sleep 10s
-        shell: bash
+      - name: Sleep for 5 seconds
+        run: sleep 5s
 
       - name: Verify test manifests rdcl deployment
-        uses: steebchen/kubectl@v2.0.0
-        with:
-          config: ${{ secrets.KUBECONFIG }}
-          command: get rdcl -n test-${{github.sha}}
+        id: rdcl-init
+        run: |
+          echo ::set-output name=status::$(kubectl get rediscluster -n test-${{github.sha}} --template='{{.status.status}}')
 
       - name: Delete test manifests
         uses: steebchen/kubectl@v2.0.0
         with:
           config: ${{ secrets.KUBECONFIG }}
           command: delete -f config/test/tests.yaml
+
+      - name: Sleep for 15 seconds
+        run: sleep 15s
+
+      - name: Verify test manifests rdcl deployment
+        id: rdcl-ready
+        run: |
+          echo ::set-output name=status::$(kubectl get rediscluster -n test-${{github.sha}} --template='{{.status.status}}')
+
+      - name: Check rdcl status
+        if: ${{ steps.rdcl-init.status != "Initializing" }}
+        run: exit 1
+
+      - name: Check rdcl status
+        if: ${{ steps.rdcl-ready.status != "Ready" }}
+        run: exit 1
