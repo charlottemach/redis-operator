@@ -49,7 +49,7 @@ jobs:
         run: |
           curl -sLO "https://dl.k8s.io/release/$version/bin/linux/amd64/kubectl" -o kubectl
           chmod +x kubectl
-          mv kubectl /usr/local/bin
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin
           echo "KUBECONFIG=$(echo '${{ env.KUBECONFIG_B64 }}' | base64 -d)" >> $GITHUB_ENV
  
       - name: Run tests for Kubernetes
