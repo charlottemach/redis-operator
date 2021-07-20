@@ -113,7 +113,7 @@ jobs:
       - name: Verify test manifests rdcl deployment
         id: rdcl-init
         run: |
-          status=$(kubectl get rediscluster -n test-${{github.sha}} --template='{{.status.status}}')
+          status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
           echo "rdcl status: $status"
           echo ::set-output name=status::$status
 
@@ -123,7 +123,7 @@ jobs:
       - name: Verify test manifests rdcl deployment
         id: rdcl-ready
         run: |
-          status=$(kubectl get rediscluster -n test-${{github.sha}} --template='{{.status.status}}')
+          status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
           echo "rdcl status: $status"
           echo ::set-output name=status::$status
 
