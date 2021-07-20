@@ -117,12 +117,12 @@ jobs:
           echo "rdcl status: $status"
           echo ::set-output name=status::$status
 
+      - name: Sleep for 15 seconds
+        run: sleep 15s
+
       - name: Delete test manifests
         run: |
           kubectl delete -f config/test/tests.yaml
-
-      - name: Sleep for 15 seconds
-        run: sleep 15s
 
       - name: Verify test manifests rdcl deployment
         id: rdcl-ready
