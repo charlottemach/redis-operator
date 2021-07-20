@@ -11,7 +11,7 @@ metadata:
     team: team-a
 spec:
   replicas: 3
-  storage: 500mb
+  storage: 500Mi
   image: redislabs/redisgraph:2.4.1
   config: |
     maxmemory 400mb
