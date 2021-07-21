@@ -52,7 +52,7 @@ jobs:
           chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
           echo '${{ env.KUBECONFIG_B64 }}' | base64 -d > /tmp/kubeconfig
           echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
- 
+
       - name: Run tests for Kubernetes
         run: |
           make test
@@ -110,21 +110,42 @@ jobs:
       - name: Sleep for 15 seconds
         run: sleep 15s
 
-      - name: Verify test manifests rdcl deployment
+      - name: Verify test manifests rdcl deployment - Initializing
         id: rdcl-init
         run: |
           status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
-          echo "rdcl status: $status"
           echo ::set-output name=status::$status
 
       - name: Sleep for 1 minute
         run: sleep 60s
 
-      - name: Verify test manifests rdcl deployment
+      - name: Verify test manifests rdcl deployment - Ready
         id: rdcl-ready
         run: |
           status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
-          echo "rdcl status: $status"
+          echo ::set-output name=status::$status
+
+      - name: Scale down
+        id: scale-down
+        run: |
+          kubectl patch rdcl -n test-${{github.sha}} redis-cluster --patch '{"spec": {"replicas": "2"}}'
+
+      - name: Sleep for 3seconds
+        run: sleep 3s
+
+      - name: Verify test manifests rdcl deployment - ScalingDown
+        id: rdcl-scalingdown
+        run: |
+          status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
+          echo ::set-output name=status::$status
+
+      - name: Sleep for 3seconds
+        run: sleep 3s
+
+      - name: Verify test manifests rdcl deployment - Ready
+        id: rdcl-ready2
+        run: |
+          status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
           echo ::set-output name=status::$status
 
       - name: Delete test manifests
@@ -137,4 +158,12 @@ jobs:
 
       - name: Check rdcl-ready status
         if: ${{ steps.rdcl-ready.outputs.status != 'Ready' }}
+        run: exit 1
+
+      - name: Check rdcl-scalingdown status
+        if: ${{ steps.rdcl-scalingdown.outputs.status != 'ScalingDown' }}
+        run: exit 1
+
+      - name: Check rdcl-ready2 status
+        if: ${{ steps.rdcl-ready2.outputs.status != 'Ready' }}
         run: exit 1
