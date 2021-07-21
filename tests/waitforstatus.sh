@@ -17,7 +17,6 @@ waitForStatus()
     local waitstatus=$3
     local timeout=$4
     local status=""
-    echo "waitForStatus Status=$status,Waitstatus=$waitstatus"
     for ((i=1;i<=timeout;i++)); do
         status=$(getStatus $namespace $name)
         if [[ "$status" == "$waitstatus" ]]; then break; fi
