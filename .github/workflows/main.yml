@@ -94,78 +94,32 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
 
-      - name: Replace variables
+      - name: Prepare test
         run: |
           make IMG=sha-${{github.sha}} NAMESPACE=test-${{github.sha}} int-test
 
-      - name: Generate test manifests
+      - name: Wait for Initializing
         run: |
-          kubectl kustomize config/test > config/test/tests.yaml
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Initializing 20
 
-      - name: Apply test manifests
+      - name: Wait for Ready
         run: |
-          kubectl kustomize config/ops/crd/ | kubectl apply -f -
-          kubectl apply -f config/test/tests.yaml
-
-      - name: Sleep for 15 seconds
-        run: sleep 15s
-
-      - name: Verify test manifests rdcl deployment - Initializing
-        id: rdcl-init
-        run: |
-          status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
-          echo ::set-output name=status::$status
-
-      - name: Sleep for 1 minute
-        run: sleep 60s
-
-      - name: Verify test manifests rdcl deployment - Ready
-        id: rdcl-ready
-        run: |
-          status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
-          echo ::set-output name=status::$status
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 60
 
       - name: Scale down
         id: scale-down
         run: |
           kubectl patch rdcl -n test-${{github.sha}} redis-cluster -p '{"spec":{"replicas":2}}' --type=merge
 
-      - name: Sleep for 5seconds
-        run: sleep 5s
-
-      - name: Verify test manifests rdcl deployment - ScalingUp
-        id: rdcl-up
+      - name: Wait for ScalingUp
         run: |
-          status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
-          echo $status
-          echo ::set-output name=status::$status
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" ScalingUp 30
 
-      - name: Sleep for 1 minute
-        run: sleep 60s
-
-      - name: Verify test manifests rdcl deployment - Ready
-        id: rdcl-ready2
+      - name: Wait for Ready
         run: |
-          status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
-          echo $status
-          echo ::set-output name=status::$status
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 120
 
       - name: Delete test manifests
+        if: ${{ always() }}
         run: |
-          kubectl delete -f config/test/tests.yaml
-
-      - name: Check rdcl-init status
-        if: ${{ steps.rdcl-init.outputs.status != 'Initializing' }}
-        run: exit 1
-
-      - name: Check rdcl-ready status
-        if: ${{ steps.rdcl-ready.outputs.status != 'Ready' }}
-        run: exit 1
-
-      - name: Check rdcl-scalingup status
-        if: ${{ steps.rdcl-up.outputs.status != 'ScalingUp' }}
-        run: exit 1
-
-      - name: Check rdcl-ready2 status
-        if: ${{ steps.rdcl-ready2.outputs.status != 'Ready' }}
-        run: exit 1
+          make IMG=sha-${{github.sha}} NAMESPACE=test-${{github.sha}}
