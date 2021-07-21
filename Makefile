@@ -155,18 +155,16 @@ int-test-generate:
 	kubectl kustomize config/test > config/test/tests.yaml
 
 int-test-replace: 
-	$(SED) -i 's/<IMAGE>/$(IMG)/' config/test/image.yaml
-	$(SED) -i 's/default/$(NAMESPACE)/' config/test/kustomization.yaml
+	$(SED) -i 's/<IMAGE>/$(IMG)/' config/test/tests.yaml
+	$(SED) -i 's/default/$(NAMESPACE)/' config/test/tests.yaml
 
 int-test-clean:
 	kubectl delete -f config/test/tests.yaml
 	rm config/test/tests.yaml
 
-$INT_TEST = ./tests/integration.sh
 int-test-apply:
 	kubectl kustomize config/ops/crd/ | kubectl apply -f -
 	kubectl apply -f config/test/tests.yaml
-	$(INT_TEST) 
 
 .PHONY=int-test
 int-test: int-test-generate int-test-replace int-test-apply

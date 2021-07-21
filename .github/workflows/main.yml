@@ -122,4 +122,4 @@ jobs:
       - name: Delete test manifests
         if: ${{ always() }}
         run: |
-          make IMG=sha-${{github.sha}} NAMESPACE=test-${{github.sha}}
+          make IMG=sha-${{github.sha}} NAMESPACE=test-${{github.sha}} int-test-clean
