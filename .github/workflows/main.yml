@@ -128,7 +128,7 @@ jobs:
       - name: Scale down
         id: scale-down
         run: |
-          kubectl patch rdcl -n test-${{github.sha}} redis-cluster --patch '{"spec": {"replicas": "2"}}'
+          kubectl patch rdcl -n test-${{github.sha}} redis-cluster --type='json' --patch '{"spec": {"replicas": "2"}}'
 
       - name: Sleep for 3seconds
         run: sleep 3s
@@ -139,8 +139,8 @@ jobs:
           status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
           echo ::set-output name=status::$status
 
-      - name: Sleep for 3seconds
-        run: sleep 3s
+      - name: Sleep for 1 minute
+        run: sleep 60s
 
       - name: Verify test manifests rdcl deployment - Ready
         id: rdcl-ready2
