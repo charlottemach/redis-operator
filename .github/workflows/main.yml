@@ -134,7 +134,7 @@ jobs:
         run: sleep 3s
 
       - name: Verify test manifests rdcl deployment - ScalingDown
-        id: rdcl-scalingdown
+        id: rdcl-up
         run: |
           status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
           echo ::set-output name=status::$status
@@ -160,8 +160,8 @@ jobs:
         if: ${{ steps.rdcl-ready.outputs.status != 'Ready' }}
         run: exit 1
 
-      - name: Check rdcl-scalingdown status
-        if: ${{ steps.rdcl-scalingdown.outputs.status != 'ScalingDown' }}
+      - name: Check rdcl-scalingup status
+        if: ${{ steps.rdcl-up.outputs.status != 'ScalingUp' }}
         run: exit 1
 
       - name: Check rdcl-ready2 status
