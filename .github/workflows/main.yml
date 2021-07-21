@@ -132,9 +132,9 @@ jobs:
           kubectl delete -f config/test/tests.yaml
 
       - name: Check rdcl-init status
-        if: ${{ steps.rdcl-init.status != 'Initializing' }}
+        if: ${{ steps.rdcl-init.outputs.status != 'Initializing' }}
         run: exit 1
 
       - name: Check rdcl-ready status
-        if: ${{ steps.rdcl-ready.status != 'Ready' }}
+        if: ${{ steps.rdcl-ready.outputs.status != 'Ready' }}
         run: exit 1
