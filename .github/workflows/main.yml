@@ -128,7 +128,7 @@ jobs:
       - name: Scale down
         id: scale-down
         run: |
-          kubectl patch rdcl -n test-${{github.sha}} redis-cluster --type='json' --patch '{"spec": {"replicas": "2"}}'
+          kubectl patch rdcl -n test-${{github.sha}} redis-cluster -p '{"spec":{"replicas":2}}' --type=merge
 
       - name: Sleep for 3seconds
         run: sleep 3s
