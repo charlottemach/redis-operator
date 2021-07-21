@@ -130,13 +130,14 @@ jobs:
         run: |
           kubectl patch rdcl -n test-${{github.sha}} redis-cluster -p '{"spec":{"replicas":2}}' --type=merge
 
-      - name: Sleep for 3seconds
-        run: sleep 3s
+      - name: Sleep for 5seconds
+        run: sleep 5s
 
-      - name: Verify test manifests rdcl deployment - ScalingDown
+      - name: Verify test manifests rdcl deployment - ScalingUp
         id: rdcl-up
         run: |
           status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
+          echo $status
           echo ::set-output name=status::$status
 
       - name: Sleep for 1 minute
@@ -146,6 +147,7 @@ jobs:
         id: rdcl-ready2
         run: |
           status=$(kubectl get rediscluster -n test-${{github.sha}} redis-cluster --template='{{.status.status}}')
+          echo $status
           echo ::set-output name=status::$status
 
       - name: Delete test manifests
