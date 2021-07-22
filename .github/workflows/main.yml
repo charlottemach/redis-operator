@@ -106,6 +106,10 @@ jobs:
         run: |
           ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 60
 
+      - name: Add data
+        run: |
+          cat ./tests/data_100kl.txt | kubectl exec -it -n test-${{github.sha}} redis-cluster-0 -- redis-cli -c --pipe
+
       - name: Scale up
         run: |
           kubectl patch rdcl -n test-${{github.sha}} redis-cluster -p '{"spec":{"replicas":2}}' --type=merge
