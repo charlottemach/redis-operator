@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -152,6 +153,33 @@ var _ = Describe("Reconciler", func() {
 				err = k8sClient.Get(context.Background(), types.NamespacedName{Name: cluster.Name, Namespace: "default"}, cmap)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(sset.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String()).To(Equal("800Mi"))
+
+			})
+			It("Stateful set is created with custom resource limits", func() {
+				clusterName := "resources-labels-cluster-test"
+
+				// create test cluster
+				scluster := CreateRedisCluster()
+				scluster.SetName(clusterName)
+				scluster.Spec.Labels = &map[string]string{"belongsto": "team-a", "other": "label"}
+				scluster.Spec.Resources = &corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("599Mi"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("599Mi"),
+					},
+				}
+				Expect(k8sClient.Create(context.Background(), scluster)).Should(Succeed())
+				time.Sleep(5 * time.Second)
+				sset := &v1.StatefulSet{}
+				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: scluster.Name, Namespace: "default"}, sset)
+				Expect(err).ToNot(HaveOccurred())
+				//Expect(sset.Spec.Template.Labels).To(Equal(scluster.Spec.Labels))
+				Expect(sset.Labels).To(ContainElements("team-a", "label"))
+				Expect(sset.Spec.Template.Spec.Containers[0].Resources).To(Equal(*scluster.Spec.Resources))
 
 			})
 			It("Service set is created", func() {

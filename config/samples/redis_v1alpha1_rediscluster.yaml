@@ -9,12 +9,23 @@ metadata:
   labels:
     app: redis-graph
     team: team-a
+    custom: labels
 spec:
   replicas: 1
   storage: 500Mi
   image: redislabs/redisgraph:2.4.1
+  labels:
+    team: team-a
+    custom: labels
+  resources:
+    limits:
+      cpu: 1
+      memory: 200Mi
+    requests:
+      cpu: 1
+      memory: 200Mi
   config: |
-    maxmemory 400mb
+    maxmemory 200mb
     maxmemory-samples 5
     maxmemory-policy allkeys-lru
     appendonly yes
