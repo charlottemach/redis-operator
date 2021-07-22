@@ -314,6 +314,14 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 
 func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.RedisClusterSpec, labels map[string]string, configmap *corev1.ConfigMap) (*v1.StatefulSet, error) {
 	statefulSet := redis.CreateStatefulSet(ctx, req, spec, labels)
+
+	if spec.Resources != nil {
+		for k := range statefulSet.Spec.Template.Spec.Containers {
+			statefulSet.Spec.Template.Spec.Containers[k].Resources = *spec.Resources
+		}
+		return statefulSet, nil
+	}
+
 	config := spec.Config
 	configStringMap := redis.ConfigStringToMap(config)
 	withDefaults := redis.MergeWithDefaultConfig(configStringMap)
