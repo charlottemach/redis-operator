@@ -14,6 +14,7 @@ env:
   CR_PAT: ${{ secrets.CR_PAT }}
   DH_USER: ${{ secrets.DOCKERHUB_USER }}
   DH_TOKEN: ${{ secrets.DOCKERHUB_PASS }}
+  KUBECONFIG_B64: ${{ secrets.KUBECONFIG }}
 
 jobs:
   tests-and-build:
@@ -43,14 +44,18 @@ jobs:
           curl -L https://go.kubebuilder.io/dl/2.3.1/${os}/${arch} | tar -xz -C /tmp/
           sudo mv /tmp/kubebuilder_2.3.1_${os}_${arch} /usr/local/kubebuilder
           export PATH=$PATH:/usr/local/kubebuilder/bin
- 
+
+      - name: Setup kubectl
+        run: |
+          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" -o kubectl
+          chmod +x kubectl
+          chmod +x kubectl && sudo mv kubectl /usr/local/bin/kubectl
+          echo '${{ env.KUBECONFIG_B64 }}' | base64 -d > /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> $GITHUB_ENV
+
       - name: Run tests for Kubernetes
         run: |
           make test
-
-      - name: Deleting KinD cluster
-        if: ${{ always() }}
-        run: kind delete cluster
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -74,16 +79,12 @@ jobs:
 
       - name: Docker meta
         id: docker_meta
-        uses: crazy-max/ghaction-docker-meta@v1
+        uses: docker/metadata-action@v3
         with:
           images: ghcr.io/containersolutions/redis-operator
-          labels:
-            org.opencontainers.image.source="https://github.com/ContainerSolutions/redis-operator"
-          tag-sha: true
-          tag-custom: ci
-          tag-semver: |
-            {{version}}
-            {{major}}.{{minor}}
+          tags: |
+            type=sha,format=long
+            type=semver,pattern={{version}}
 
       - name: Build and push
         uses: docker/build-push-action@v2
@@ -92,3 +93,32 @@ jobs:
           tags: ${{ steps.docker_meta.outputs.tags }}
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
+
+      - name: Prepare test
+        run: |
+          make IMG=sha-${{github.sha}} NAMESPACE=test-${{github.sha}} int-test
+
+      - name: Wait for Initializing
+        run: |
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Initializing 20
+
+      - name: Wait for Ready
+        run: |
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 60
+
+      - name: Scale up
+        run: |
+          kubectl patch rdcl -n test-${{github.sha}} redis-cluster -p '{"spec":{"replicas":2}}' --type=merge
+
+      - name: Wait for ScalingUp
+        run: |
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" ScalingUp 30
+
+      - name: Wait for Ready
+        run: |
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 240
+
+      - name: Delete test manifests
+        if: ${{ always() }}
+        run: |
+          make IMG=sha-${{github.sha}} NAMESPACE=test-${{github.sha}} int-test-clean

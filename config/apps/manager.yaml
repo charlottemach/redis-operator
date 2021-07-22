@@ -21,6 +21,8 @@ spec:
         - /manager
         args:
         - --leader-elect
+        - --max-concurrent-reconciles
+        - "1"
         image: ghcr.io/containersolutions/redis-operator:0.3.0
         imagePullPolicy: Always
         name: manager
@@ -40,10 +42,10 @@ spec:
           periodSeconds: 10
         resources:
           limits:
-            cpu: 500m
-            memory: 300Mi
+            cpu: 800m
+            memory: 900Mi
           requests:
-            cpu: 400m
-            memory: 200Mi
+            cpu: 800m
+            memory: 900Mi
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10

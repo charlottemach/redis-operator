@@ -30,6 +30,10 @@ BUNDLE_IMG ?= controller-bundle:$(VERSION)
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+
+# Namespace to deploy tests to
+NAMESPACE ?= default
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
 
@@ -143,3 +147,25 @@ bundle-build:
 
 bundle-push:
 	docker push $(BUNDLE_IMG)
+
+# Integration tests
+SED = $(shell which sed)
+
+int-test-generate:
+	kubectl kustomize config/test > config/test/tests.yaml
+
+int-test-replace: 
+	$(SED) -i 's/<IMAGE>/$(IMG)/' config/test/tests.yaml
+	$(SED) -i 's/default/$(NAMESPACE)/' config/test/tests.yaml
+
+int-test-clean:
+	kubectl delete -f config/test/tests.yaml
+	rm config/test/tests.yaml
+
+int-test-apply:
+	kubectl kustomize config/ops/crd/ | kubectl apply -f -
+	kubectl apply -f config/test/tests.yaml
+
+.PHONY=int-test
+int-test: int-test-generate int-test-replace int-test-apply
+

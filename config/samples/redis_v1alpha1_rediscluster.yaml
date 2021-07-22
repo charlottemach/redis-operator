@@ -1,20 +1,20 @@
 apiVersion: redis.containersolutions.com/v1alpha1
 kind: RedisCluster
 metadata:
-  name: rediscluster-sample
+  name: redis-cluster
   namespace: default
   finalizers:
-    - redis.containersolutions.com/rdb-backup
-    - redis.containersolutions.com/configmap-cleanup
+#    - redis.containersolutions.com/rdb-backup
+#    - redis.containersolutions.com/configmap-cleanup
   labels:
     app: redis-graph
     team: team-a
 spec:
-  replicas: 3
-  storage: 2Gi
+  replicas: 1
+  storage: 500Mi
   image: redislabs/redisgraph:2.4.1
   config: |
-    maxmemory 1800mb
+    maxmemory 400mb
     maxmemory-samples 5
     maxmemory-policy allkeys-lru
     appendonly yes
