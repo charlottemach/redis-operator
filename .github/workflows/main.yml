@@ -116,7 +116,7 @@ jobs:
 
       - name: Wait for ScalingUp
         run: |
-          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" ScalingUp 30
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" ScalingUp 360
 
       - name: Wait for Ready
         run: |
@@ -128,7 +128,7 @@ jobs:
 
       - name: Wait for ScalingDown
         run: |
-          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" ScalingDown 30
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" ScalingDown 360
 
       - name: Wait for Ready
         run: |
