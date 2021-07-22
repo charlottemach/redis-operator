@@ -159,8 +159,8 @@ int-test-replace:
 	$(SED) -i 's/default/$(NAMESPACE)/' config/test/tests.yaml
 
 int-test-clean:
-	kubectl delete -f config/test/tests.yaml
-	rm config/test/tests.yaml
+	-kubectl delete -f config/test/tests.yaml
+	-rm config/test/tests.yaml
 
 int-test-apply:
 	kubectl kustomize config/ops/crd/ | kubectl apply -f -
