@@ -112,7 +112,7 @@ jobs:
 
       - name: Scale up
         run: |
-          kubectl patch rdcl -n test-${{github.sha}} redis-cluster -p '{"spec":{"replicas":2}}' --type=merge
+          kubectl patch rdcl -n test-${{github.sha}} redis-cluster -p '{"spec":{"replicas":3}}' --type=merge
 
       - name: Wait for ScalingUp
         run: |
@@ -120,7 +120,19 @@ jobs:
 
       - name: Wait for Ready
         run: |
-          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 240
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 360
+
+      - name: Scale down
+        run: |
+          kubectl patch rdcl -n test-${{github.sha}} redis-cluster -p '{"spec":{"replicas":1}}' --type=merge
+
+      - name: Wait for ScalingDown
+        run: |
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" ScalingDown 30
+
+      - name: Wait for Ready
+        run: |
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 360
 
       - name: Delete test manifests
         if: ${{ always() }}
