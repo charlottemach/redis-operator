@@ -65,6 +65,10 @@ spec:
                 type: string
               image:
                 type: string
+              labels:
+                additionalProperties:
+                  type: string
+                type: object
               monitoring:
                 description: PodTemplateSpec describes the data a pod should have
                   when created from a template
