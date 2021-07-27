@@ -8,29 +8,41 @@ metadata:
           "apiVersion": "redis.containersolutions.com/v1alpha1",
           "kind": "RedisCluster",
           "metadata": {
-            "finalizers": [
-              "redis.containersolutions.com/rdb-backup",
-              "redis.containersolutions.com/configmap-cleanup"
-            ],
+            "finalizers": null,
             "labels": {
               "app": "redis-graph",
+              "custom": "labels",
               "team": "team-a"
             },
-            "name": "rediscluster-sample",
+            "name": "redis-cluster",
             "namespace": "default"
           },
           "spec": {
-            "config": "maxmemory 2600mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly yes\nprotected-mode no\nloadmodule /usr/lib/redis/modules/redisgraph.so\n",
+            "config": "maxmemory 200mb\nmaxmemory-samples 5\nmaxmemory-policy allkeys-lru\nappendonly yes\nprotected-mode no\nloadmodule /usr/lib/redis/modules/redisgraph.so\n",
             "image": "redislabs/redisgraph:2.4.1",
+            "labels": {
+              "custom": "labels",
+              "team": "team-a"
+            },
             "replicas": 1,
-            "storage": "3Gi"
+            "resources": {
+              "limits": {
+                "cpu": 1,
+                "memory": "200Mi"
+              },
+              "requests": {
+                "cpu": 1,
+                "memory": "200Mi"
+              }
+            },
+            "storage": "500Mi"
           }
         }
       ]
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.9.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: redis-cluster-operator.v0.1.0
+  name: redis-cluster-operator.v0.2.3
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -139,9 +151,11 @@ spec:
               containers:
               - args:
                 - --leader-elect
+                - --max-concurrent-reconciles
+                - "1"
                 command:
                 - /manager
-                image: ghcr.io/containersolutions/redis-operator:sha-e539c67
+                image: ghcr.io/containersolutions/redis-operator:0.3.0
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -158,11 +172,11 @@ spec:
                   periodSeconds: 10
                 resources:
                   limits:
-                    cpu: 500m
-                    memory: 300Mi
+                    cpu: 800m
+                    memory: 900Mi
                   requests:
-                    cpu: 400m
-                    memory: 200Mi
+                    cpu: 800m
+                    memory: 900Mi
                 securityContext:
                   allowPrivilegeEscalation: false
               securityContext:
@@ -217,4 +231,4 @@ spec:
   provider:
     name: redis-cluster-operator
     url: https://github.com/containersolutions/redis-operator
-  version: 0.1.0
+  version: 0.2.3

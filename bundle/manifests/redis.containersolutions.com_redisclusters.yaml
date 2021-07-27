@@ -11,10 +11,29 @@ spec:
     kind: RedisCluster
     listKind: RedisClusterList
     plural: redisclusters
+    shortNames:
+    - rdcl
     singular: rediscluster
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Amount of Redis nodes
+      jsonPath: .spec.replicas
+      name: Replicas
+      type: integer
+    - description: Source image for Redis instance
+      jsonPath: .spec.image
+      name: Image
+      type: string
+    - description: Amount of storage for Redis
+      jsonPath: .spec.storage
+      name: Storage
+      type: string
+    - description: The status of Redis cluster
+      jsonPath: .status.status
+      name: Status
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: RedisCluster is the Schema for the redisclusters API
@@ -44,6 +63,10 @@ spec:
                 type: string
               image:
                 type: string
+              labels:
+                additionalProperties:
+                  type: string
+                type: object
               monitoring:
                 description: PodTemplateSpec describes the data a pod should have
                   when created from a template
@@ -6302,6 +6325,32 @@ spec:
               replicas:
                 format: int32
                 type: integer
+              resources:
+                description: ResourceRequirements describes the compute resource requirements.
+                properties:
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: 'Limits describes the maximum amount of compute resources
+                      allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: 'Requests describes the minimum amount of compute
+                      resources required. If Requests is omitted for a container,
+                      it defaults to Limits if that is explicitly specified, otherwise
+                      to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                    type: object
+                type: object
               storage:
                 type: string
               version:
@@ -6311,24 +6360,40 @@ spec:
             description: RedisClusterStatus defines the observed state of RedisCluster
             properties:
               nodes:
-                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                  of cluster Important: Run "make" to regenerate code after modifying
-                  this file'
-                items:
+                additionalProperties:
                   properties:
                     ip:
                       type: string
                     name:
                       type: string
+                    nodeid:
+                      type: string
                   required:
                   - ip
                   - name
+                  - nodeid
+                  type: object
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                type: object
+              slots:
+                items:
+                  properties:
+                    end:
+                      type: integer
+                    start:
+                      type: integer
+                  required:
+                  - end
+                  - start
                   type: object
                 type: array
               status:
                 type: string
             required:
             - nodes
+            - slots
             - status
             type: object
         type: object

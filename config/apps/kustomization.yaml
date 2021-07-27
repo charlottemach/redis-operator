@@ -10,12 +10,8 @@ configMapGenerator:
   name: manager-config
 
 namespace: devops-redis-operator
-  
-patchesStrategicMerge:
-- image.yaml
-# apiVersion: kustomize.config.k8s.io/v1beta1
-# kind: Kustomization
-# images:
-# - name: controller
-#   newName: controller
-#   newTag: latest
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+images:
+- name: controller
+  newName: docker.io/itxapps/operator-bundle.redis-operator
