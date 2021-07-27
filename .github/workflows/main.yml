@@ -106,17 +106,33 @@ jobs:
         run: |
           ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 60
 
+      - name: Add data
+        run: |
+          cat ./tests/data_100kl.txt | kubectl exec -it -n test-${{github.sha}} redis-cluster-0 -- redis-cli -c --pipe
+
       - name: Scale up
         run: |
-          kubectl patch rdcl -n test-${{github.sha}} redis-cluster -p '{"spec":{"replicas":2}}' --type=merge
+          kubectl patch rdcl -n test-${{github.sha}} redis-cluster -p '{"spec":{"replicas":3}}' --type=merge
 
       - name: Wait for ScalingUp
         run: |
-          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" ScalingUp 30
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" ScalingUp 540
 
       - name: Wait for Ready
         run: |
-          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 240
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 540
+
+      - name: Scale down
+        run: |
+          kubectl patch rdcl -n test-${{github.sha}} redis-cluster -p '{"spec":{"replicas":1}}' --type=merge
+
+      - name: Wait for ScalingDown
+        run: |
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" ScalingDown 540
+
+      - name: Wait for Ready
+        run: |
+          ./tests/waitforstatus.sh test-${{github.sha}} "redis-cluster" Ready 540
 
       - name: Delete test manifests
         if: ${{ always() }}
