@@ -108,7 +108,7 @@ jobs:
 
       - name: Add data
         run: |
-          cat ./tests/data_100kl.txt | kubectl exec -it -n test-${{github.sha}} redis-cluster-0 -- redis-cli -c --pipe
+          cat ./tests/data_44kl.txt | kubectl exec -it -n test-${{github.sha}} redis-cluster-0 -- redis-cli -c --pipe
 
       - name: Scale up
         run: |
