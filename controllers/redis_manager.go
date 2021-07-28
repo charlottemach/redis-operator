@@ -188,10 +188,7 @@ func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, slot int, src_nod
 		}
 		if redisCluster.Spec.PurgeKeysOnRebalance == true {
 			// purge keys
-			err = srcClient.Del(ctx, keysInSlot...).Err()
-			if err != nil {
-				r.Log.Error(err, "Purge failed", "keys", keysInSlot)
-			}
+			srcClient.Del(ctx, keysInSlot...).Err()
 
 		} else {
 			// migrate keys
