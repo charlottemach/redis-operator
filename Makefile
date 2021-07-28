@@ -31,6 +31,10 @@ BUNDLE_IMG ?= controller-bundle:$(VERSION)
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 
+# Image REF in bundle image
+# Can be overwritten with make bundle IMAGE_REF=<some-registry>/<project-name-bundle>:<tag>
+IMAGE_REF ?= $(IMG)
+
 # Namespace to deploy tests to
 NAMESPACE ?= default
 
@@ -137,7 +141,7 @@ endef
 .PHONY: bundle ## Generate bundle manifests and metadata, then validate generated files.
 bundle: manifests kustomize
 	operator-sdk generate kustomize manifests -q
-	cd config/apps && $(KUSTOMIZE) edit set image controller=$(IMG)
+	cd config/apps && $(KUSTOMIZE) edit set image controller=$(IMAGE_REF)
 	$(KUSTOMIZE) build config | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
 
