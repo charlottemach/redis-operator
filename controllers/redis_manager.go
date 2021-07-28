@@ -183,14 +183,23 @@ func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, slot int, src_nod
 			break
 		} else {
 			if slot%100 == 0 {
-				r.Log.Info("MoveSlot - found keys in slot", "slot", slot, "count", len(keysInSlot))
+				r.Log.Info("MoveSlot - found keys in slot.", "slot", slot, "count", len(keysInSlot), "migrate?", redisCluster.Spec.MigrateKeysOnRebalance, "purge?", !redisCluster.Spec.MigrateKeysOnRebalance)
 			}
 		}
-		for _, key := range keysInSlot {
-			// todo: batch migrate
-			err = srcClient.Migrate(ctx, dst_node.IP, strconv.Itoa(redis.RedisCommPort), key, 0, 1*time.Second).Err()
+		if redisCluster.Spec.MigrateKeysOnRebalance == true {
+			for _, key := range keysInSlot {
+
+				err = srcClient.Migrate(ctx, dst_node.IP, strconv.Itoa(redis.RedisCommPort), key, 0, 1*time.Second).Err()
+				if err != nil {
+					r.Log.Error(err, "Migrate failed", "key", key, "keysinslot", keysInSlot)
+					return err
+				}
+			}
+		} else {
+			// purge keys
+			err = srcClient.Del(ctx, keysInSlot...).Err()
 			if err != nil {
-				r.Log.Error(err, "Migrate failed", "key", key, "keysinslot", keysInSlot)
+				r.Log.Error(err, "Purge failed", "keys", keysInSlot)
 				return err
 			}
 		}
