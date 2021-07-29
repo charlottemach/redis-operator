@@ -3,7 +3,6 @@ package controllers
 import (
 	"errors"
 	"reflect"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -184,18 +183,12 @@ func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, slot int, src_nod
 			break
 		} else {
 			if slot%100 == 0 {
-				r.Log.Info("MoveSlot - found keys in slot.", "slot", slot, "count", len(keysInSlot), "migrate?", !redisCluster.Spec.PurgeKeysOnRebalance, "purge?", redisCluster.Spec.PurgeKeysOnRebalance)
+				r.Log.Info("MoveSlot - found keys in slot.", "slot", slot, "count", len(keysInSlot), "migrate?", !redisCluster.Spec.PurgeKeysOnRebalance, "purge?", redisCluster.Spec.PurgeKeysOnRebalance, "keys", keysInSlot)
 			}
 		}
 		if redisCluster.Spec.PurgeKeysOnRebalance == true {
 			// purge keys
-			err = srcClient.Del(ctx, keysInSlot...).Err()
-			if err != nil {
-				for _, v := range keysInSlot {
-					failedKeys[v]++
-				}
-			}
-
+			srcClient.Del(ctx, keysInSlot...).Err()
 		} else {
 			// migrate keys
 			for _, key := range keysInSlot {
@@ -218,20 +211,6 @@ func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, slot int, src_nod
 		r.Log.Error(err, "Setslot failed", "slot", slot, "node", dst_node)
 		return err
 	}
-	keys := make([]string, 0, len(failedKeys))
-	for k := range failedKeys {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		if failedKeys[k] > 1 {
-			r.Log.Info("MoveSlot - failedKeys", "k", k, "failedKeys[k]", failedKeys[k])
-		} else {
-			break
-		}
-	}
-
 	return nil
 }
 
