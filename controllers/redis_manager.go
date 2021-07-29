@@ -175,7 +175,6 @@ func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, slot int, src_nod
 	if err != nil {
 		return err
 	}
-	failedKeys := make(map[string]int)
 	// todo: batching
 	for i := 1; ; i++ {
 		keysInSlot := srcClient.ClusterGetKeysInSlot(ctx, slot, 100).Val()
