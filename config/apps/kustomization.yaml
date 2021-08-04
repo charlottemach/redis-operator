@@ -13,5 +13,6 @@ namespace: devops-redis-operator
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
-- name: controller
-  newName: docker.io/itxapps/operator-bundle.redis-operator
+- name: ghcr.io/containersolutions/redis-operator
+  newName: ghcr.io/containersolutions/redis-operator
+  newTag: 0.2.7

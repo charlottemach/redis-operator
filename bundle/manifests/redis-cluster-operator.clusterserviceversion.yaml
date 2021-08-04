@@ -24,6 +24,7 @@ metadata:
               "custom": "labels",
               "team": "team-a"
             },
+            "purgekeysonrebalance": true,
             "replicas": 1,
             "resources": {
               "limits": {
@@ -42,7 +43,7 @@ metadata:
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.9.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: redis-cluster-operator.v0.2.3
+  name: redis-cluster-operator.v0.2.7
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -155,7 +156,7 @@ spec:
                 - "1"
                 command:
                 - /manager
-                image: ghcr.io/containersolutions/redis-operator:0.3.0
+                image: ghcr.io/containersolutions/redis-operator:0.2.7
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -231,4 +232,4 @@ spec:
   provider:
     name: redis-cluster-operator
     url: https://github.com/containersolutions/redis-operator
-  version: 0.2.3
+  version: 0.2.7
