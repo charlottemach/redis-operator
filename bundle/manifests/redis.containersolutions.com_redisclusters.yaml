@@ -6322,6 +6322,8 @@ spec:
                     - containers
                     type: object
                 type: object
+              purgekeysonrebalance:
+                type: boolean
               replicas:
                 format: int32
                 type: integer
