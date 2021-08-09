@@ -170,7 +170,6 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		r.CheckConfigurationStatus(ctx, redisCluster)
 	case v1alpha1.StatusReady:
 		r.UpdateScalingStatus(ctx, redisCluster)
-		r.ClusterMeet(ctx, redisCluster.Status.Nodes, redisCluster)
 	case v1alpha1.StatusScalingDown:
 		err := r.ScaleCluster(ctx, redisCluster)
 		if err != nil {
@@ -228,6 +227,20 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 			redisCluster.Status.Status = v1alpha1.StatusInitializing
 		}
 	}
+	slots := r.GetClusterSlotConfiguration(ctx, redisCluster)
+	nodeips := make(map[string]string, len(readyNodes))
+	for id, node := range readyNodes {
+		nodeips[node.IP] = id
+	}
+
+	for _, slotRange := range slots {
+		slotnodeid := nodeips[slotRange.Nodes[0].Addr]
+		if slotnodeid == "" {
+			redisCluster.Status.Status = v1alpha1.StatusConfiguring
+			r.Log.Info("CheckConfigurationStatus - slots configuration doesn't match ip address of a node, reconfiguration will apply", "expected_addr", slotRange.Nodes[0].Addr)
+		}
+	}
+
 }
 
 // TODO: swap return values
