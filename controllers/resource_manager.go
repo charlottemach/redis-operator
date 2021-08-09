@@ -215,6 +215,7 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 	clusterInfo := r.GetClusterInfo(ctx, redisCluster)
 	state := clusterInfo["cluster_state"]
 	slots_ok := clusterInfo["cluster_slots_ok"]
+	slots_assigned := clusterInfo["cluster_slots_assigned"]
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	r.Log.Info("CheckConfigurationStatus", "cluster_state", state, "cluster_slots_ok", slots_ok, "status", redisCluster.Status.Status, "clusterinfo", clusterInfo)
 	if state == "ok" && slots_ok == strconv.Itoa(redis.TotalClusterSlots) {
@@ -226,19 +227,28 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 		} else {
 			redisCluster.Status.Status = v1alpha1.StatusInitializing
 		}
+		return
 	}
 	slots := r.GetClusterSlotConfiguration(ctx, redisCluster)
 	nodeips := make(map[string]string, len(readyNodes))
 	for id, node := range readyNodes {
 		nodeips[node.IP] = id
 	}
-
+	// Check that ips in current configuration of slots have a corresponding node IP in pods
+	r.Log.Info("CheckConfigurationStatus - checking slots ips matches", "ips", nodeips)
 	for _, slotRange := range slots {
-		slotnodeid := nodeips[slotRange.Nodes[0].Addr]
+		addr := strings.Split(slotRange.Nodes[0].Addr, ":")
+		slotnodeid := nodeips[addr[0]]
 		if slotnodeid == "" {
 			redisCluster.Status.Status = v1alpha1.StatusConfiguring
 			r.Log.Info("CheckConfigurationStatus - slots configuration doesn't match ip address of a node, reconfiguration will apply", "expected_addr", slotRange.Nodes[0].Addr)
+			return
 		}
+	}
+
+	if slots_ok != slots_assigned {
+		redisCluster.Status.Status = v1alpha1.StatusConfiguring
+		r.Log.Info("CheckConfigurationStatus - slots assigned != slots  ok", "slots_ok", slots_ok, "slots_assigned", slots_assigned)
 	}
 
 }
