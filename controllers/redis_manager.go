@@ -267,6 +267,9 @@ func (r *RedisClusterReconciler) GetAnyRedisClient(ctx context.Context, redisClu
 
 func (r *RedisClusterReconciler) GetClusterSlotConfiguration(ctx context.Context, redisCluster *v1alpha1.RedisCluster) []redisclient.ClusterSlot {
 	client := r.GetAnyRedisClient(ctx, redisCluster)
+	if client == nil {
+		return nil
+	}
 	clusterSlots := client.ClusterSlots(ctx).Val()
 	// todo: error handling
 	return clusterSlots
