@@ -39,6 +39,7 @@ import (
 type RedisClient struct {
 	NodeId      string
 	RedisClient *redisclient.Client
+	IP          string
 }
 
 var redisClients map[string]*RedisClient = make(map[string]*RedisClient)
@@ -58,10 +59,11 @@ func (r *RedisClusterReconciler) RefreshRedisClients(ctx context.Context, redisC
 
 func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, nodeId string, redisCluster *v1alpha1.RedisCluster) *redisclient.Client {
 	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
-	if redisClients[nodeId] == nil {
+	// If redisClient for this node has not been initialized, or the IP has changed
+	if redisClients[nodeId] == nil || redisClients[nodeId].IP != nodes[nodeId].IP {
 		secret, _ := r.GetRedisSecret(redisCluster)
 		rdb := r.GetRedisClient(ctx, nodes[nodeId].IP, secret)
-		redisClients[nodeId] = &RedisClient{NodeId: nodeId, RedisClient: rdb}
+		redisClients[nodeId] = &RedisClient{NodeId: nodeId, RedisClient: rdb, IP: nodes[nodeId].IP}
 	}
 
 	return redisClients[nodeId].RedisClient
