@@ -170,6 +170,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		r.CheckConfigurationStatus(ctx, redisCluster)
 	case v1alpha1.StatusReady:
 		r.UpdateScalingStatus(ctx, redisCluster)
+		r.ClusterMeet(ctx, redisCluster.Status.Nodes, redisCluster)
 	case v1alpha1.StatusScalingDown:
 		err := r.ScaleCluster(ctx, redisCluster)
 		if err != nil {
