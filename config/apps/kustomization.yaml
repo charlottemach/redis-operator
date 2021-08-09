@@ -15,4 +15,4 @@ kind: Kustomization
 images:
 - name: ghcr.io/containersolutions/redis-operator
   newName: ghcr.io/containersolutions/redis-operator
-  newTag: 0.2.7
+  newTag: latest

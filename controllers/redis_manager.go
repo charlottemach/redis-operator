@@ -29,6 +29,8 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"sort"
+
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	redis "github.com/containersolutions/redis-operator/internal/redis"
 	"k8s.io/apimachinery/pkg/labels"
@@ -37,6 +39,7 @@ import (
 type RedisClient struct {
 	NodeId      string
 	RedisClient *redisclient.Client
+	IP          string
 }
 
 var redisClients map[string]*RedisClient = make(map[string]*RedisClient)
@@ -56,10 +59,11 @@ func (r *RedisClusterReconciler) RefreshRedisClients(ctx context.Context, redisC
 
 func (r *RedisClusterReconciler) GetRedisClientForNode(ctx context.Context, nodeId string, redisCluster *v1alpha1.RedisCluster) *redisclient.Client {
 	nodes, _ := r.GetReadyNodes(ctx, redisCluster)
-	if redisClients[nodeId] == nil {
+	// If redisClient for this node has not been initialized, or the IP has changed
+	if redisClients[nodeId] == nil || redisClients[nodeId].IP != nodes[nodeId].IP {
 		secret, _ := r.GetRedisSecret(redisCluster)
 		rdb := r.GetRedisClient(ctx, nodes[nodeId].IP, secret)
-		redisClients[nodeId] = &RedisClient{NodeId: nodeId, RedisClient: rdb}
+		redisClients[nodeId] = &RedisClient{NodeId: nodeId, RedisClient: rdb, IP: nodes[nodeId].IP}
 	}
 
 	return redisClients[nodeId].RedisClient
@@ -265,6 +269,9 @@ func (r *RedisClusterReconciler) GetAnyRedisClient(ctx context.Context, redisClu
 
 func (r *RedisClusterReconciler) GetClusterSlotConfiguration(ctx context.Context, redisCluster *v1alpha1.RedisCluster) []redisclient.ClusterSlot {
 	client := r.GetAnyRedisClient(ctx, redisCluster)
+	if client == nil {
+		return nil
+	}
 	clusterSlots := client.ClusterSlots(ctx).Val()
 	// todo: error handling
 	return clusterSlots
@@ -376,12 +383,15 @@ func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[stri
 	// when all nodes are formed in a cluster, addslots
 	r.Log.Info("AssignSlots", "nodeslen", len(nodes), "nodes", nodes)
 	slots := redis.SplitNodeSlots(len(nodes))
-	i := 0
-	for _, node := range nodes {
-		rdb := r.GetRedisClientForNode(ctx, node.NodeID, redisCluster)
+	keys := make([]string, 0, len(nodes))
+	for id := range nodes {
+		keys = append(keys, id)
+	}
+	sort.Strings(keys)
+	for i, nodeId := range keys {
+		rdb := r.GetRedisClientForNode(ctx, nodeId, redisCluster)
 		rdb.ClusterAddSlotsRange(ctx, slots[i].Start, slots[i].End)
 		r.Log.Info("Running cluster assign slots", "pods", nodes)
-		i++
 	}
 }
 
