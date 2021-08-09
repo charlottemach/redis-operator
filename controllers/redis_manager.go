@@ -29,6 +29,8 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"sort"
+
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	redis "github.com/containersolutions/redis-operator/internal/redis"
 	"k8s.io/apimachinery/pkg/labels"
@@ -376,12 +378,15 @@ func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[stri
 	// when all nodes are formed in a cluster, addslots
 	r.Log.Info("AssignSlots", "nodeslen", len(nodes), "nodes", nodes)
 	slots := redis.SplitNodeSlots(len(nodes))
-	i := 0
-	for _, node := range nodes {
-		rdb := r.GetRedisClientForNode(ctx, node.NodeID, redisCluster)
+	keys := make([]string, 0, len(nodes))
+	for id := range nodes {
+		keys = append(keys, id)
+	}
+	sort.Strings(keys)
+	for i, nodeId := range keys {
+		rdb := r.GetRedisClientForNode(ctx, nodeId, redisCluster)
 		rdb.ClusterAddSlotsRange(ctx, slots[i].Start, slots[i].End)
 		r.Log.Info("Running cluster assign slots", "pods", nodes)
-		i++
 	}
 }
 
