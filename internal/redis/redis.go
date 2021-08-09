@@ -131,6 +131,7 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.Redi
 func CreateProbe(initial int32, period int32) *corev1.Probe {
 	return &corev1.Probe{
 		Handler: corev1.Handler{
+			TCPSocket: *corev1.TCPSocketAction{Port: RedisCommPort},
 			Exec: &corev1.ExecAction{
 				Command: []string{"sh", "-c", "redis-cli -h $(cat /etc/hostname) -c ping"},
 			},
