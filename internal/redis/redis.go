@@ -50,6 +50,7 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.Redi
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{RedisClusterLabel: req.Name},
 			},
+			ServiceName: req.Name,
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "data",
