@@ -88,7 +88,7 @@ var _ = BeforeSuite(func() {
 	err = (&RedisClusterReconciler{
 		Client:                  k8sManager.GetClient(),
 		Scheme:                  k8sManager.GetScheme(),
-		Log:                     ctrl.Log.WithName("controllers").WithName("rediscluster"),
+		LogParent:               ctrl.Log.WithName("controllers").WithName("rediscluster"),
 		MaxConcurrentReconciles: 10,
 		Recorder:                k8sManager.GetEventRecorderFor("rediscluster-controller"),
 	}).SetupWithManager(k8sManager)
