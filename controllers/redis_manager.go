@@ -29,6 +29,8 @@ import (
 	controllerruntime "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"sort"
+
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	redis "github.com/containersolutions/redis-operator/internal/redis"
 	"k8s.io/apimachinery/pkg/labels"
@@ -123,25 +125,6 @@ func (r *RedisClusterReconciler) UpdateScalingStatus(ctx context.Context, redisC
 	return nil
 }
 
-func (r *RedisClusterReconciler) QuickRebalance(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
-	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
-	r.Log.Info("QuickRebalance", "nodeslen", len(readyNodes), "nodes", readyNodes)
-	nodesBySequence, _ := r.NodesBySequence(readyNodes)
-	remainingNodes := make(map[string]*v1alpha1.RedisNode)
-	for seq, node := range nodesBySequence {
-		if seq < len(redisCluster.Status.Slots) {
-			remainingNodes[node.NodeID] = node
-		}
-	}
-	for nodeId := range remainingNodes {
-		rdb := r.GetRedisClientForNode(ctx, nodeId, redisCluster)
-		rdb.FlushAll(ctx)
-	}
-	r.Log.Info("Running cluster assign slots", "pods", readyNodes)
-	r.AssignSlots(ctx, remainingNodes, redisCluster)
-	return nil
-}
-
 func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	var err error
 	sset_err, sset := r.FindExistingStatefulSet(ctx, controllerruntime.Request{NamespacedName: types.NamespacedName{Name: redisCluster.Name, Namespace: redisCluster.Namespace}})
@@ -151,26 +134,21 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	currSsetReplicas := *(sset.Spec.Replicas)
 	redisCluster.Status.Slots = r.GetSlotsRanges(redisCluster.Spec.Replicas)
-	// scaling down: if data migration takes place, move slots
 	if redisCluster.Spec.Replicas < currSsetReplicas {
 		// downscaling, migrate nodes
 		r.Log.Info("redisCluster.Spec.Replicas < statefulset.Spec.Replicas, downscaling", "rc.s.r", redisCluster.Spec.Replicas, "sset.s.r", currSsetReplicas)
 		err = r.RebalanceCluster(ctx, redisCluster)
-
 		if err != nil {
 			r.Log.Error(err, "Issues with rebalancing cluster when scaling down")
 			return err
 		}
 		r.ForgetUnnecessaryNodes(ctx, redisCluster)
 	}
-	//  scaling up and all pods became ready
+
 	if int(redisCluster.Spec.Replicas) == len(readyNodes) {
-		r.Log.Info("ScaleCluster - len(nodes) == replicas. Running forget unnecessary nodes, clustermeet, rebalance")
-
 		r.ClusterMeet(ctx, readyNodes, redisCluster)
-		time.Sleep(10 * time.Second)
+		time.Sleep(5 * time.Second)
 		err = r.RebalanceCluster(ctx, redisCluster)
-
 		if err != nil {
 			r.Log.Error(err, "ScaleCluster - issue with rebalancing cluster when scaling up")
 			return err
@@ -299,16 +277,13 @@ func (r *RedisClusterReconciler) GetClusterSlotConfiguration(ctx context.Context
 	return clusterSlots
 }
 
-func (r *RedisClusterReconciler) NodesBySequence(nodes map[string]*v1alpha1.RedisNode) ([]*v1alpha1.RedisNode, error) {
+func (r *RedisClusterReconciler) NodeBySequence(nodes map[string]*v1alpha1.RedisNode) ([]*v1alpha1.RedisNode, error) {
 	nodesBySequence := make([]*v1alpha1.RedisNode, len(nodes))
 	for _, node := range nodes {
 		nodeNameElements := strings.Split(node.NodeName, "-")
 		nodePodSequence, err := strconv.Atoi(nodeNameElements[len(nodeNameElements)-1])
 		if err != nil {
 			return nil, err
-		}
-		if len(nodes) <= nodePodSequence {
-			return nil, fmt.Errorf("Race condition with pod sequence: seq:%d, butlen: %d", nodePodSequence, len(nodes))
 		}
 		nodesBySequence[nodePodSequence] = node
 	}
@@ -319,7 +294,7 @@ func (r *RedisClusterReconciler) ForgetUnnecessaryNodes(ctx context.Context, red
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	remainingNodes := make([]*v1alpha1.RedisNode, 0)
 	overstayedTheirWelcomeNodes := make([]*v1alpha1.RedisNode, 0)
-	nodesBySequence, _ := r.NodesBySequence(readyNodes)
+	nodesBySequence, _ := r.NodeBySequence(readyNodes)
 	for seq, node := range nodesBySequence {
 		if seq < len(redisCluster.Status.Slots) {
 			remainingNodes = append(remainingNodes, node)
@@ -343,9 +318,6 @@ func (r *RedisClusterReconciler) ForgetUnnecessaryNodes(ctx context.Context, red
 }
 
 func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
-	if redisCluster.Spec.PurgeKeysOnRebalance {
-		return r.QuickRebalance(ctx, redisCluster)
-	}
 	var err error
 	// get current slots assignment
 	clusterSlots := r.GetClusterSlotConfiguration(ctx, redisCluster)
@@ -359,11 +331,11 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 		return fmt.Errorf("Got %d readyNodes, but need %d readyNodes to satisfy slots map allocation.", len(readyNodes), len(slotsMap))
 	}
 	r.Log.Info("RebalanceCluster", "nodes", readyNodes, "slotsMap", slotsMap)
-	nodesBySequence, _ := r.NodesBySequence(readyNodes)
+
 	// iterate over slots map
 	for _, slotRange := range clusterSlots {
 		for slot := slotRange.Start; slot <= slotRange.End; slot++ {
-			dstNodeId, err := r.GetSlotOwnerCandidate(slot, nodesBySequence, redisCluster)
+			dstNodeId, err := r.GetSlotOwnerCandidate(slot, redisCluster)
 			if err != nil {
 				return err
 			}
@@ -387,7 +359,13 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 	return err
 }
 
-func (r *RedisClusterReconciler) GetSlotOwnerCandidate(slot int, nodesBySequence []*v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) (string, error) {
+func (r *RedisClusterReconciler) GetSlotOwnerCandidate(slot int, redisCluster *v1alpha1.RedisCluster) (string, error) {
+	readyNodes, _ := r.GetReadyNodes(context.TODO(), redisCluster)
+	if len(readyNodes) < len(redisCluster.Status.Slots) {
+		return "", fmt.Errorf("Not enough readyNodes to satisfy slots map: nodes=%d, ranges=%d", len(readyNodes), len(redisCluster.Status.Slots))
+	}
+	nodesBySequence, _ := r.NodeBySequence(readyNodes)
+
 	slotsMap := redisCluster.Status.Slots
 	for k, slotRange := range slotsMap {
 		if slot <= slotRange.End && slot >= slotRange.Start {
@@ -405,9 +383,13 @@ func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[stri
 	// when all nodes are formed in a cluster, addslots
 	r.Log.Info("AssignSlots", "nodeslen", len(nodes), "nodes", nodes)
 	slots := redis.SplitNodeSlots(len(nodes))
-	nodesBySequence, _ := r.NodesBySequence(nodes)
-	for i, node := range nodesBySequence {
-		rdb := r.GetRedisClientForNode(ctx, node.NodeID, redisCluster)
+	keys := make([]string, 0, len(nodes))
+	for id := range nodes {
+		keys = append(keys, id)
+	}
+	sort.Strings(keys)
+	for i, nodeId := range keys {
+		rdb := r.GetRedisClientForNode(ctx, nodeId, redisCluster)
 		rdb.ClusterAddSlotsRange(ctx, slots[i].Start, slots[i].End)
 		r.Log.Info("Running cluster assign slots", "pods", nodes)
 	}

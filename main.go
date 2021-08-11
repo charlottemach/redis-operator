@@ -108,7 +108,7 @@ func main() {
 
 	if err = (&controllers.RedisClusterReconciler{
 		Client:                  mgr.GetClient(),
-		LogParent:               ctrl.Log.WithName("controllers").WithName("RedisCluster"),
+		Log:                     ctrl.Log.WithName("controllers").WithName("RedisCluster"),
 		Scheme:                  mgr.GetScheme(),
 		Recorder:                mgr.GetEventRecorderFor("rediscluster-controller"),
 		MaxConcurrentReconciles: maxConcurrentReconciles,

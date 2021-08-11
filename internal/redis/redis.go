@@ -39,21 +39,14 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.Redi
 	if storage == "" {
 		storage = "12Gi"
 	}
-	podManagementPolicy := v1.OrderedReadyPodManagement
-	if spec.PurgeKeysOnRebalance == true {
-		podManagementPolicy = v1.ParallelPodManagement
-
-	}
 	redisStatefulSet := &v1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
 			Namespace: req.Namespace,
 			Labels:    labels,
 		},
-
 		Spec: v1.StatefulSetSpec{
-			Replicas:            &replicas,
-			PodManagementPolicy: podManagementPolicy,
+			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{RedisClusterLabel: req.Name},
 			},

@@ -55,7 +55,6 @@ import (
 type RedisClusterReconciler struct {
 	client.Client
 	Log                     logr.Logger
-	LogParent               logr.Logger
 	Scheme                  *runtime.Scheme
 	Recorder                record.EventRecorder
 	Finalizers              []finalizer.Finalizer
@@ -72,7 +71,7 @@ type RedisClusterReconciler struct {
 //+kubebuilder:rbac:groups="",resources=configmaps;services,verbs=get;list;create;delete
 //+kubebuilder:rbac:groups=apps,resources=statefulsets;deployments,verbs=create;delete;patch;update
 func (r *RedisClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Log = r.LogParent.WithValues("redis-cluster", req.NamespacedName)
+	_ = r.Log.WithValues("rediscluster", req.NamespacedName)
 	r.Log.Info("RedisCluster reconciler called", "name", req.Name, "ns", req.Namespace)
 	redisCluster := &v1alpha1.RedisCluster{}
 	err := r.Client.Get(ctx, req.NamespacedName, redisCluster)
