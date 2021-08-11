@@ -126,7 +126,7 @@ func (r *RedisClusterReconciler) UpdateScalingStatus(ctx context.Context, redisC
 func (r *RedisClusterReconciler) QuickRebalance(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	r.Log.Info("QuickRebalance", "nodeslen", len(readyNodes), "nodes", readyNodes)
-	nodesBySequence, _ := r.NodeBySequence(readyNodes)
+	nodesBySequence, _ := r.NodesBySequence(readyNodes)
 	remainingNodes := make(map[string]*v1alpha1.RedisNode)
 	for seq, node := range nodesBySequence {
 		if seq < len(redisCluster.Status.Slots) {
@@ -299,13 +299,17 @@ func (r *RedisClusterReconciler) GetClusterSlotConfiguration(ctx context.Context
 	return clusterSlots
 }
 
-func (r *RedisClusterReconciler) NodeBySequence(nodes map[string]*v1alpha1.RedisNode) ([]*v1alpha1.RedisNode, error) {
+func (r *RedisClusterReconciler) NodesBySequence(nodes map[string]*v1alpha1.RedisNode) ([]*v1alpha1.RedisNode, error) {
 	nodesBySequence := make([]*v1alpha1.RedisNode, len(nodes))
+	r.Log.Info("NodesBySequence", "len", len(nodes), "nodes", nodes)
 	for _, node := range nodes {
 		nodeNameElements := strings.Split(node.NodeName, "-")
 		nodePodSequence, err := strconv.Atoi(nodeNameElements[len(nodeNameElements)-1])
 		if err != nil {
 			return nil, err
+		}
+		if len(nodes) <= nodePodSequence {
+			return nil, fmt.Errorf("Race condition with pod sequence: seq:%d, butlen: %d", nodePodSequence, len(nodes))
 		}
 		nodesBySequence[nodePodSequence] = node
 	}
@@ -316,7 +320,7 @@ func (r *RedisClusterReconciler) ForgetUnnecessaryNodes(ctx context.Context, red
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	remainingNodes := make([]*v1alpha1.RedisNode, 0)
 	overstayedTheirWelcomeNodes := make([]*v1alpha1.RedisNode, 0)
-	nodesBySequence, _ := r.NodeBySequence(readyNodes)
+	nodesBySequence, _ := r.NodesBySequence(readyNodes)
 	for seq, node := range nodesBySequence {
 		if seq < len(redisCluster.Status.Slots) {
 			remainingNodes = append(remainingNodes, node)
@@ -389,7 +393,7 @@ func (r *RedisClusterReconciler) GetSlotOwnerCandidate(slot int, redisCluster *v
 	if len(readyNodes) < len(redisCluster.Status.Slots) {
 		return "", fmt.Errorf("Not enough readyNodes to satisfy slots map: nodes=%d, ranges=%d", len(readyNodes), len(redisCluster.Status.Slots))
 	}
-	nodesBySequence, _ := r.NodeBySequence(readyNodes)
+	nodesBySequence, _ := r.NodesBySequence(readyNodes)
 
 	slotsMap := redisCluster.Status.Slots
 	for k, slotRange := range slotsMap {
@@ -408,7 +412,7 @@ func (r *RedisClusterReconciler) AssignSlots(ctx context.Context, nodes map[stri
 	// when all nodes are formed in a cluster, addslots
 	r.Log.Info("AssignSlots", "nodeslen", len(nodes), "nodes", nodes)
 	slots := redis.SplitNodeSlots(len(nodes))
-	nodesBySequence, _ := r.NodeBySequence(nodes)
+	nodesBySequence, _ := r.NodesBySequence(nodes)
 	for i, node := range nodesBySequence {
 		rdb := r.GetRedisClientForNode(ctx, node.NodeID, redisCluster)
 		rdb.ClusterAddSlotsRange(ctx, slots[i].Start, slots[i].End)
