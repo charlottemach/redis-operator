@@ -197,6 +197,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		if err == nil {
 			r.UpdateScalingStatus(ctx, redisCluster)
 		}
+		requeue = true
 	default:
 		r.CheckConfigurationStatus(ctx, redisCluster)
 	}
