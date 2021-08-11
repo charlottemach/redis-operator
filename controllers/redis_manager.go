@@ -154,7 +154,6 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 	// scaling down: if data migration takes place, move slots
 	if redisCluster.Spec.Replicas < currSsetReplicas {
 		// downscaling, migrate nodes
-		r.ForgetUnnecessaryNodes(ctx, redisCluster)
 		r.Log.Info("redisCluster.Spec.Replicas < statefulset.Spec.Replicas, downscaling", "rc.s.r", redisCluster.Spec.Replicas, "sset.s.r", currSsetReplicas)
 		err = r.RebalanceCluster(ctx, redisCluster)
 
@@ -162,13 +161,14 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 			r.Log.Error(err, "Issues with rebalancing cluster when scaling down")
 			return err
 		}
+		r.ForgetUnnecessaryNodes(ctx, redisCluster)
 	}
 	//  scaling up and all pods became ready
 	if int(redisCluster.Spec.Replicas) == len(readyNodes) {
 		r.Log.Info("ScaleCluster - len(nodes) == replicas. Running forget unnecessary nodes, clustermeet, rebalance")
 
 		r.ClusterMeet(ctx, readyNodes, redisCluster)
-		time.Sleep(5 * time.Second)
+		time.Sleep(10 * time.Second)
 		err = r.RebalanceCluster(ctx, redisCluster)
 
 		if err != nil {

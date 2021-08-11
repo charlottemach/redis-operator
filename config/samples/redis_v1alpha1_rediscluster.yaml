@@ -14,7 +14,7 @@ spec:
   replicas: 1
   storage: 500Mi
   image: redislabs/redisgraph:2.4.1
-  purgekeysonrebalance: false
+  purgekeysonrebalance: true
   labels:
     team: team-a
     custom: labels
