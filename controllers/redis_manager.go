@@ -301,7 +301,6 @@ func (r *RedisClusterReconciler) GetClusterSlotConfiguration(ctx context.Context
 
 func (r *RedisClusterReconciler) NodesBySequence(nodes map[string]*v1alpha1.RedisNode) ([]*v1alpha1.RedisNode, error) {
 	nodesBySequence := make([]*v1alpha1.RedisNode, len(nodes))
-	r.Log.Info("NodesBySequence", "len", len(nodes), "nodes", nodes)
 	for _, node := range nodes {
 		nodeNameElements := strings.Split(node.NodeName, "-")
 		nodePodSequence, err := strconv.Atoi(nodeNameElements[len(nodeNameElements)-1])
@@ -360,11 +359,11 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 		return fmt.Errorf("Got %d readyNodes, but need %d readyNodes to satisfy slots map allocation.", len(readyNodes), len(slotsMap))
 	}
 	r.Log.Info("RebalanceCluster", "nodes", readyNodes, "slotsMap", slotsMap)
-
+	nodesBySequence, _ := r.NodesBySequence(readyNodes)
 	// iterate over slots map
 	for _, slotRange := range clusterSlots {
 		for slot := slotRange.Start; slot <= slotRange.End; slot++ {
-			dstNodeId, err := r.GetSlotOwnerCandidate(slot, redisCluster)
+			dstNodeId, err := r.GetSlotOwnerCandidate(slot, nodesBySequence, redisCluster)
 			if err != nil {
 				return err
 			}
@@ -388,13 +387,7 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 	return err
 }
 
-func (r *RedisClusterReconciler) GetSlotOwnerCandidate(slot int, redisCluster *v1alpha1.RedisCluster) (string, error) {
-	readyNodes, _ := r.GetReadyNodes(context.TODO(), redisCluster)
-	if len(readyNodes) < len(redisCluster.Status.Slots) {
-		return "", fmt.Errorf("Not enough readyNodes to satisfy slots map: nodes=%d, ranges=%d", len(readyNodes), len(redisCluster.Status.Slots))
-	}
-	nodesBySequence, _ := r.NodesBySequence(readyNodes)
-
+func (r *RedisClusterReconciler) GetSlotOwnerCandidate(slot int, nodesBySequence []*v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) (string, error) {
 	slotsMap := redisCluster.Status.Slots
 	for k, slotRange := range slotsMap {
 		if slot <= slotRange.End && slot >= slotRange.Start {
