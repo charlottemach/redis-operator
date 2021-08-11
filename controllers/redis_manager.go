@@ -343,9 +343,9 @@ func (r *RedisClusterReconciler) ForgetUnnecessaryNodes(ctx context.Context, red
 }
 
 func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
-	if redisCluster.Spec.PurgeKeysOnRebalance {
-		return r.QuickRebalance(ctx, redisCluster)
-	}
+	// if redisCluster.Spec.PurgeKeysOnRebalance {
+	// 	return r.QuickRebalance(ctx, redisCluster)
+	// }
 	var err error
 	// get current slots assignment
 	clusterSlots := r.GetClusterSlotConfiguration(ctx, redisCluster)
