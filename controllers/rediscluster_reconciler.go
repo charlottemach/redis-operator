@@ -60,6 +60,7 @@ type RedisClusterReconciler struct {
 	Recorder                record.EventRecorder
 	Finalizers              []finalizer.Finalizer
 	MaxConcurrentReconciles int
+	ConcurrentMigrate       int
 }
 
 //+kubebuilder:rbac:groups=redis.containersolutions.com,resources=redisclusters,verbs=get;list;watch;create;update;patch;delete

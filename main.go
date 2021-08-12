@@ -61,9 +61,11 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var maxConcurrentReconciles int
+	var concurrentMigrates int
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 10, "Maximum number of concurrent events.")
+	flag.IntVar(&concurrentMigrates, "concurrent-migrates", 3, "Number of concurrent migrate operations.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -112,6 +114,7 @@ func main() {
 		Scheme:                  mgr.GetScheme(),
 		Recorder:                mgr.GetEventRecorderFor("rediscluster-controller"),
 		MaxConcurrentReconciles: maxConcurrentReconciles,
+		ConcurrentMigrate:       concurrentMigrates,
 		Finalizers: []finalizer.Finalizer{
 			&finalizer.BackupFinalizer{},
 			&finalizer.ConfigMapCleanupFinalizer{},

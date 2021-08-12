@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"math/rand"
 	"reflect"
 	"strconv"
 	"strings"
@@ -38,6 +39,16 @@ type RedisClient struct {
 	NodeId      string
 	RedisClient *redisclient.Client
 	IP          string
+}
+
+type MigrationResult struct {
+	Error error
+}
+
+type SlotMigration struct {
+	Dst  string
+	Src  string
+	Slot int
 }
 
 var redisClients map[string]*RedisClient = make(map[string]*RedisClient)
@@ -184,7 +195,7 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 	return nil
 }
 
-func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, slot int, src_node, dst_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
+func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, channum, slot int, src_node, dst_node *v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
 	if dst_node == nil || src_node == nil {
 		return fmt.Errorf("dst or src node does not exist")
 	}
@@ -204,12 +215,11 @@ func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, slot int, src_nod
 	// todo: batching
 	for i := 1; ; i++ {
 		keysInSlot := srcClient.ClusterGetKeysInSlot(ctx, slot, 100).Val()
+		if slot%201 == 0 {
+			r.Log.Info("MoveSlot - found keys in slot.", "chan", channum, "slot", slot, "count", len(keysInSlot), "migrate?", !redisCluster.Spec.PurgeKeysOnRebalance, "purge?", redisCluster.Spec.PurgeKeysOnRebalance, "keys", keysInSlot)
+		}
 		if len(keysInSlot) == 0 {
 			break
-		} else {
-			if slot%100 == 0 {
-				r.Log.Info("MoveSlot - found keys in slot.", "slot", slot, "count", len(keysInSlot), "migrate?", !redisCluster.Spec.PurgeKeysOnRebalance, "purge?", redisCluster.Spec.PurgeKeysOnRebalance, "keys", keysInSlot)
-			}
 		}
 		if redisCluster.Spec.PurgeKeysOnRebalance == true {
 			// purge keys
@@ -343,10 +353,8 @@ func (r *RedisClusterReconciler) ForgetUnnecessaryNodes(ctx context.Context, red
 }
 
 func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
-	// if redisCluster.Spec.PurgeKeysOnRebalance {
-	// 	return r.QuickRebalance(ctx, redisCluster)
-	// }
 	var err error
+
 	// get current slots assignment
 	clusterSlots := r.GetClusterSlotConfiguration(ctx, redisCluster)
 	// get slots map source from the cluster status field
@@ -360,6 +368,15 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 	}
 	r.Log.Info("RebalanceCluster", "nodes", readyNodes, "slotsMap", slotsMap)
 	nodesBySequence, _ := r.NodesBySequence(readyNodes)
+
+	chans := make([]chan SlotMigration, r.ConcurrentMigrate)
+	result := make([]chan MigrationResult, r.ConcurrentMigrate)
+	for i := 0; i < r.ConcurrentMigrate; i++ {
+		chans[i] = make(chan SlotMigration)
+		result[i] = make(chan MigrationResult)
+		go r.MoveSlotsAsync(chans[i], result[i], i, readyNodes, redisCluster)
+
+	}
 	// iterate over slots map
 	for _, slotRange := range clusterSlots {
 		for slot := slotRange.Start; slot <= slotRange.End; slot++ {
@@ -374,17 +391,48 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 			srcNode := readyNodes[srcNodeId]
 			dstNode := readyNodes[dstNodeId]
 			if srcNode == nil {
-				return fmt.Errorf("srcNode with nodeid %s not found in the list of nodes", srcNodeId)
+				err = fmt.Errorf("srcNode with nodeid %s not found in the list of nodes", srcNodeId)
+				return err
 			}
-			if srcNode == nil {
-				return fmt.Errorf("srcNode with nodeid %s not found in the list of nodes", dstNodeId)
+			if dstNode == nil {
+				err = fmt.Errorf("srcNode with nodeid %s not found in the list of nodes", dstNodeId)
+				return err
+			}
+			randChan := rand.Intn(3)
+
+			chans[randChan] <- SlotMigration{
+				Src: srcNodeId, Dst: dstNodeId, Slot: slot,
 			}
 
-			err = r.MoveSlot(ctx, slot, srcNode, dstNode, redisCluster)
+		}
+	}
+	for i := range chans {
+		close(chans[i])
+	}
+	for i := 0; i < len(result); i++ {
+		for res := range result[i] {
+			if res.Error != nil {
+				err = res.Error
+				r.Recorder.Event(redisCluster, "Warning", "RebalanceCluster", "Migration encouentered errors.")
+			}
+		}
+	}
+	return err
+}
+
+func (r *RedisClusterReconciler) MoveSlotsAsync(msgc chan SlotMigration, resultc chan MigrationResult, channum int, readyNodes map[string]*v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) {
+	result := MigrationResult{}
+	defer close(resultc)
+	for v := range msgc {
+		err := r.MoveSlot(context.TODO(), channum, v.Slot, readyNodes[v.Src], readyNodes[v.Dst], redisCluster)
+
+		if err != nil {
+			result = MigrationResult{Error: err}
+			resultc <- result
+			r.Log.Info("MoveSlotsAsync - error when moveslot", "err", err, "slot", v)
 		}
 	}
 
-	return err
 }
 
 func (r *RedisClusterReconciler) GetSlotOwnerCandidate(slot int, nodesBySequence []*v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) (string, error) {
