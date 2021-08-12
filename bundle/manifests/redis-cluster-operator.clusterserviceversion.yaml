@@ -24,7 +24,7 @@ metadata:
               "custom": "labels",
               "team": "team-a"
             },
-            "purgekeysonrebalance": true,
+            "purgekeysonrebalance": false,
             "replicas": 1,
             "resources": {
               "limits": {
@@ -43,7 +43,7 @@ metadata:
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.9.0
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: redis-cluster-operator.v0.2.7
+  name: redis-cluster-operator.v0.2.12
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -153,10 +153,12 @@ spec:
               - args:
                 - --leader-elect
                 - --max-concurrent-reconciles
-                - "1"
+                - "10"
+                - --concurrent-migrates
+                - "5"
                 command:
                 - /manager
-                image: ghcr.io/containersolutions/redis-operator:0.2.7
+                image: controller:latest
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -174,10 +176,10 @@ spec:
                 resources:
                   limits:
                     cpu: 800m
-                    memory: 900Mi
+                    memory: 1Gi
                   requests:
                     cpu: 800m
-                    memory: 900Mi
+                    memory: 800Mi
                 securityContext:
                   allowPrivilegeEscalation: false
               securityContext:
@@ -210,11 +212,11 @@ spec:
         serviceAccountName: controller-manager
     strategy: deployment
   installModes:
-  - supported: false
+  - supported: true
     type: OwnNamespace
-  - supported: false
+  - supported: true
     type: SingleNamespace
-  - supported: false
+  - supported: true
     type: MultiNamespace
   - supported: true
     type: AllNamespaces
@@ -232,4 +234,4 @@ spec:
   provider:
     name: redis-cluster-operator
     url: https://github.com/containersolutions/redis-operator
-  version: 0.2.7
+  version: 0.2.12
