@@ -150,6 +150,11 @@ spec:
                 control-plane: controller-manager
             spec:
               containers:
+              - env:
+                - name: WATCH_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.annotations['olm.targetNamespaces']
               - args:
                 - --leader-elect
                 - --max-concurrent-reconciles
