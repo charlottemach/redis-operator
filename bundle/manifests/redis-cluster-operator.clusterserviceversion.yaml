@@ -163,7 +163,7 @@ spec:
                 - "5"
                 command:
                 - /manager
-                image: controller:latest
+                image: ghcr.io/containersolutions/redis-operator:0.2.12
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
