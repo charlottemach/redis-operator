@@ -101,8 +101,8 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.Redi
 								},
 							},
 							Command:        []string{"redis-server", "/conf/redis.conf"},
-							LivenessProbe:  CreateProbe(20, 5),
-							ReadinessProbe: CreateProbe(15, 5),
+							LivenessProbe:  CreateProbe(15, 5),
+							ReadinessProbe: CreateProbe(10, 5),
 							Resources: corev1.ResourceRequirements{
 								Limits:   corev1.ResourceList{},
 								Requests: corev1.ResourceList{},

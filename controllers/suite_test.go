@@ -90,6 +90,7 @@ var _ = BeforeSuite(func() {
 		Scheme:                  k8sManager.GetScheme(),
 		LogParent:               ctrl.Log.WithName("controllers").WithName("rediscluster"),
 		MaxConcurrentReconciles: 10,
+		ConcurrentMigrate:       3,
 		Recorder:                k8sManager.GetEventRecorderFor("rediscluster-controller"),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())

@@ -23,6 +23,8 @@ spec:
         - --leader-elect
         - --max-concurrent-reconciles
         - "10"
+        - --concurrent-migrates
+        - "5"
         image: ghcr.io/containersolutions/redis-operator:0.3.0
         imagePullPolicy: Always
         name: manager
