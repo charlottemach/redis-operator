@@ -80,8 +80,7 @@ func main() {
 	// courtesy of https://sdk.operatorframework.io/docs/building-operators/golang/operator-scope/
 	watchNamespace, err := getWatchNamespace()
 	if err != nil {
-		setupLog.Error(err, "unable to get WatchNamespace, "+
-			"the manager will watch and manage resources in all namespaces")
+		setupLog.Info("unable to get WatchNamespace, the manager will watch and manage resources in all namespaces")
 	}
 	ctrlOptions := ctrl.Options{
 		Scheme:                 scheme,
