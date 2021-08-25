@@ -61,81 +61,6 @@ spec:
     mediatype: image/svg+xml
   install:
     spec:
-      clusterPermissions:
-      - rules:
-        - apiGroups:
-          - ""
-          resources:
-          - configmap
-          - pods
-          - services
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - configmaps
-          - services
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-        - apiGroups:
-          - ""
-          resources:
-          - events
-          verbs:
-          - create
-          - patch
-        - apiGroups:
-          - ""
-          resources:
-          - secrets
-          verbs:
-          - get
-        - apiGroups:
-          - apps
-          resources:
-          - deployments
-          - statefulsets
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - redis.containersolutions.com
-          resources:
-          - redisclusters
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - redis.containersolutions.com
-          resources:
-          - redisclusters/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - redis.containersolutions.com
-          resources:
-          - redisclusters/status
-          verbs:
-          - get
-          - patch
-          - update
-        serviceAccountName: redis-operator-sa
       deployments:
       - name: redis-operator
         spec:
@@ -214,6 +139,78 @@ spec:
           verbs:
           - create
           - patch
+        - apiGroups:
+          - ""
+          resources:
+          - configmap
+          - pods
+          - services
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          - services
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
+        - apiGroups:
+          - ""
+          resources:
+          - secrets
+          verbs:
+          - get
+        - apiGroups:
+          - apps
+          resources:
+          - deployments
+          - statefulsets
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - redis.containersolutions.com
+          resources:
+          - redisclusters
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - redis.containersolutions.com
+          resources:
+          - redisclusters/finalizers
+          verbs:
+          - update
+        - apiGroups:
+          - redis.containersolutions.com
+          resources:
+          - redisclusters/status
+          verbs:
+          - get
+          - patch
+          - update
         serviceAccountName: redis-operator-sa
     strategy: deployment
   installModes:
