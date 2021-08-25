@@ -140,7 +140,8 @@ endef
 
 .PHONY: bundle ## Generate bundle manifests and metadata, then validate generated files.
 bundle: manifests kustomize
-	rm -rf bundle/*
+	rm -rf bundle/manifests/*
+	rm -rf bundle/metadata/*
 	operator-sdk generate kustomize manifests -q
 	cd config/apps && $(KUSTOMIZE) edit set image ghcr.io/containersolutions/redis-operator=$(IMAGE_REF)
 	$(KUSTOMIZE) build config | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
