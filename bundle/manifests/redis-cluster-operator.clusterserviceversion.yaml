@@ -41,9 +41,9 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    operators.operatorframework.io/builder: operator-sdk-v1.9.0
+    operators.operatorframework.io/builder: operator-sdk-v1.10.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: redis-cluster-operator.v0.2.12
+  name: redis-cluster-operator.v0.1.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -135,26 +135,21 @@ spec:
           - get
           - patch
           - update
-        serviceAccountName: controller-manager
+        serviceAccountName: redis-operator-sa
       deployments:
-      - name: controller-manager
+      - name: redis-operator
         spec:
           replicas: 1
           selector:
             matchLabels:
-              control-plane: controller-manager
+              control-plane: redis-operator
           strategy: {}
           template:
             metadata:
               labels:
-                control-plane: controller-manager
+                control-plane: redis-operator
             spec:
               containers:
-              - env:
-                - name: WATCH_NAMESPACE
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: metadata.annotations['olm.targetNamespaces']
               - args:
                 - --leader-elect
                 - --max-concurrent-reconciles
@@ -163,7 +158,12 @@ spec:
                 - "5"
                 command:
                 - /manager
-                image: ghcr.io/containersolutions/redis-operator:0.2.12
+                env:
+                - name: WATCH_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.annotations['olm.targetNamespaces']
+                image: controller:latest
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -171,7 +171,7 @@ spec:
                     port: 8081
                   initialDelaySeconds: 15
                   periodSeconds: 20
-                name: manager
+                name: redis-operator
                 readinessProbe:
                   httpGet:
                     path: /readyz
@@ -189,7 +189,7 @@ spec:
                   allowPrivilegeEscalation: false
               securityContext:
                 runAsNonRoot: true
-              serviceAccountName: controller-manager
+              serviceAccountName: redis-operator-sa
               terminationGracePeriodSeconds: 10
       permissions:
       - rules:
@@ -214,7 +214,7 @@ spec:
           verbs:
           - create
           - patch
-        serviceAccountName: controller-manager
+        serviceAccountName: redis-operator-sa
     strategy: deployment
   installModes:
   - supported: true
@@ -239,4 +239,4 @@ spec:
   provider:
     name: redis-cluster-operator
     url: https://github.com/containersolutions/redis-operator
-  version: 0.2.12
+  version: 0.1.0
