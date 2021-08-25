@@ -43,7 +43,7 @@ metadata:
     capabilities: Basic Install
     operators.operatorframework.io/builder: operator-sdk-v1.10.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: redis-cluster-operator.v0.1.0
+  name: redis-cluster-operator.v0.2.13
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -88,7 +88,7 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.annotations['olm.targetNamespaces']
-                image: controller:latest
+                image: ghcr.io/containersolutions/redis-operator@sha256:e52858366479ebb7c5808e26f033a7404b45d557d0d8249e811ff28155dfbc5a
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:
@@ -236,4 +236,4 @@ spec:
   provider:
     name: redis-cluster-operator
     url: https://github.com/containersolutions/redis-operator
-  version: 0.1.0
+  version: 0.2.13
