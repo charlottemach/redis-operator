@@ -148,7 +148,10 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 	if sset_err != nil {
 		return err
 	}
-	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
+	readyNodes, err := r.GetReadyNodes(ctx, redisCluster)
+	if err != nil {
+		return err
+	}
 	currSsetReplicas := *(sset.Spec.Replicas)
 	redisCluster.Status.Slots = r.GetSlotsRanges(redisCluster.Spec.Replicas)
 	// scaling down: if data migration takes place, move slots
