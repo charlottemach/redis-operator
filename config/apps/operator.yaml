@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: controller-manager
+  name: redis-operator
   labels:
-    control-plane: controller-manager
+    control-plane: redis-operator
 spec:
   selector:
     matchLabels:
-      control-plane: controller-manager
+      control-plane: redis-operator
   replicas: 1
   template:
     metadata:
       labels:
-        control-plane: controller-manager
+        control-plane: redis-operator
     spec:
       securityContext:
         runAsNonRoot: true
@@ -27,7 +27,7 @@ spec:
         - "5"
         image: ghcr.io/containersolutions/redis-operator:0.3.0
         imagePullPolicy: Always
-        name: manager
+        name: redis-operator
         securityContext:
           allowPrivilegeEscalation: false
         livenessProbe:
@@ -49,5 +49,11 @@ spec:
           requests:
             cpu: 800m
             memory: 800Mi
-      serviceAccountName: controller-manager
+        env:
+          - name: WATCH_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.annotations['olm.targetNamespaces']
+        
+      serviceAccountName: redis-operator-sa
       terminationGracePeriodSeconds: 10

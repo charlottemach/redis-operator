@@ -69,7 +69,7 @@ help: ## Display this help.
 ##@ Development
 
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/ops/crd/bases output:rbac:artifacts:config=config/ops/rbac/bases
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=redis-operator-role webhook paths="./..." output:crd:artifacts:config=config/ops/crd/bases output:rbac:artifacts:config=config/ops/rbac/bases
 
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
@@ -140,6 +140,7 @@ endef
 
 .PHONY: bundle ## Generate bundle manifests and metadata, then validate generated files.
 bundle: manifests kustomize
+	rm -rf bundle/*
 	operator-sdk generate kustomize manifests -q
 	cd config/apps && $(KUSTOMIZE) edit set image ghcr.io/containersolutions/redis-operator=$(IMAGE_REF)
 	$(KUSTOMIZE) build config | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)

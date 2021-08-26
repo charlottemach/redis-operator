@@ -41,9 +41,9 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    operators.operatorframework.io/builder: operator-sdk-v1.9.0
+    operators.operatorframework.io/builder: operator-sdk-v1.10.0+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v3
-  name: redis-cluster-operator.v0.2.12
+  name: redis-cluster-operator.v0.2.13
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -61,8 +61,84 @@ spec:
     mediatype: image/svg+xml
   install:
     spec:
-      clusterPermissions:
+      deployments:
+      - name: redis-operator
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              control-plane: redis-operator
+          strategy: {}
+          template:
+            metadata:
+              labels:
+                control-plane: redis-operator
+            spec:
+              containers:
+              - args:
+                - --leader-elect
+                - --max-concurrent-reconciles
+                - "10"
+                - --concurrent-migrates
+                - "5"
+                command:
+                - /manager
+                env:
+                - name: WATCH_NAMESPACE
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.annotations['olm.targetNamespaces']
+                image: ghcr.io/containersolutions/redis-operator@sha256:e52858366479ebb7c5808e26f033a7404b45d557d0d8249e811ff28155dfbc5a
+                imagePullPolicy: Always
+                livenessProbe:
+                  httpGet:
+                    path: /healthz
+                    port: 8081
+                  initialDelaySeconds: 15
+                  periodSeconds: 20
+                name: redis-operator
+                readinessProbe:
+                  httpGet:
+                    path: /readyz
+                    port: 8081
+                  initialDelaySeconds: 5
+                  periodSeconds: 10
+                resources:
+                  limits:
+                    cpu: 800m
+                    memory: 1Gi
+                  requests:
+                    cpu: 800m
+                    memory: 800Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+              securityContext:
+                runAsNonRoot: true
+              serviceAccountName: redis-operator-sa
+              terminationGracePeriodSeconds: 10
+      permissions:
       - rules:
+        - apiGroups:
+          - ""
+          - coordination.k8s.io
+          resources:
+          - configmaps
+          - leases
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
+        - apiGroups:
+          - ""
+          resources:
+          - events
+          verbs:
+          - create
+          - patch
         - apiGroups:
           - ""
           resources:
@@ -135,86 +211,7 @@ spec:
           - get
           - patch
           - update
-        serviceAccountName: controller-manager
-      deployments:
-      - name: controller-manager
-        spec:
-          replicas: 1
-          selector:
-            matchLabels:
-              control-plane: controller-manager
-          strategy: {}
-          template:
-            metadata:
-              labels:
-                control-plane: controller-manager
-            spec:
-              containers:
-              - env:
-                - name: WATCH_NAMESPACE
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: metadata.annotations['olm.targetNamespaces']
-              - args:
-                - --leader-elect
-                - --max-concurrent-reconciles
-                - "10"
-                - --concurrent-migrates
-                - "5"
-                command:
-                - /manager
-                image: ghcr.io/containersolutions/redis-operator:0.2.12
-                imagePullPolicy: Always
-                livenessProbe:
-                  httpGet:
-                    path: /healthz
-                    port: 8081
-                  initialDelaySeconds: 15
-                  periodSeconds: 20
-                name: manager
-                readinessProbe:
-                  httpGet:
-                    path: /readyz
-                    port: 8081
-                  initialDelaySeconds: 5
-                  periodSeconds: 10
-                resources:
-                  limits:
-                    cpu: 800m
-                    memory: 1Gi
-                  requests:
-                    cpu: 800m
-                    memory: 800Mi
-                securityContext:
-                  allowPrivilegeEscalation: false
-              securityContext:
-                runAsNonRoot: true
-              serviceAccountName: controller-manager
-              terminationGracePeriodSeconds: 10
-      permissions:
-      - rules:
-        - apiGroups:
-          - ""
-          - coordination.k8s.io
-          resources:
-          - configmaps
-          - leases
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
-        - apiGroups:
-          - ""
-          resources:
-          - events
-          verbs:
-          - create
-          - patch
-        serviceAccountName: controller-manager
+        serviceAccountName: redis-operator-sa
     strategy: deployment
   installModes:
   - supported: true
@@ -239,4 +236,4 @@ spec:
   provider:
     name: redis-cluster-operator
     url: https://github.com/containersolutions/redis-operator
-  version: 0.2.12
+  version: 0.2.13
