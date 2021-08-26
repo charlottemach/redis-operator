@@ -148,7 +148,10 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 	if sset_err != nil {
 		return err
 	}
-	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
+	readyNodes, err := r.GetReadyNodes(ctx, redisCluster)
+	if err != nil {
+		return err
+	}
 	currSsetReplicas := *(sset.Spec.Replicas)
 	redisCluster.Status.Slots = r.GetSlotsRanges(redisCluster.Spec.Replicas)
 	// scaling down: if data migration takes place, move slots
@@ -372,7 +375,10 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 	slotsMap := redisCluster.Status.Slots
 
 	// get ready nodes
-	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
+	readyNodes, err := r.GetReadyNodes(ctx, redisCluster)
+	if err != nil {
+		return err
+	}
 	// ensure there are enough ready nodes for allocation
 	if len(readyNodes) < len(slotsMap) {
 		return fmt.Errorf("Got %d readyNodes, but need %d readyNodes to satisfy slots map allocation.", len(readyNodes), len(slotsMap))
@@ -531,6 +537,12 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 				nodeId := redisClient.Do(ctx, "cluster", "myid").Val()
 				if nodeId == nil {
 					return nil, errors.New("Can't fetch node id")
+				}
+				isMaster := redisClient.Do(ctx, "cluster", "slaves", nodeId).Val().(string)
+
+				// The return value is empty with no chars if the given node is a master.
+				if strings.ContainsAny(isMaster, "abcdefghijklmnopqrstuvw") {
+					return nil, errors.New(fmt.Sprintf("There is a slave node in the cluster! ID: %s", nodeId))
 				}
 				readyNodes[nodeId.(string)] = &v1alpha1.RedisNode{IP: pod.Status.PodIP, NodeName: pod.GetName(), NodeID: nodeId.(string)}
 			}
