@@ -16,6 +16,7 @@ import (
 	//"golang.org/x/tools/godoc/redirect"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/util/retry"
 
 	// "k8s.io/apiextensions-apiserver/pkg/client/clientset"
 
@@ -28,6 +29,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	redis "github.com/containersolutions/redis-operator/internal/redis"
@@ -99,18 +101,19 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 			r.Log.Error(err, "Getting configmap data failed")
 		}
 	}
-
 	err, stateful_set := r.FindExistingStatefulSet(ctx, req)
 	var create_sset_err error
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// set status to Initializing
 			// create stateful set
+			r.Log.Info("Creating statefulset")
 			stateful_set, create_sset_err = r.CreateStatefulSet(ctx, req, redisCluster.Spec, redisCluster.ObjectMeta.GetLabels(), config_map)
 			if create_sset_err != nil {
 				r.Log.Error(err, "Error when creating StatefulSet")
 				return ctrl.Result{}, err
 			}
+			r.Log.Info("Successfully created statefulset", "statefulset", stateful_set)
 			ctrl.SetControllerReference(redisCluster, stateful_set, r.Scheme)
 			create_sset_err = r.Client.Create(ctx, stateful_set)
 			if create_sset_err != nil && errors.IsAlreadyExists(create_sset_err) {
@@ -377,12 +380,18 @@ func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl
 		return nil, err
 	}
 	memoryLimit, _ := resource.ParseQuantity(fmt.Sprintf("%dMi", maxMemoryInt)) // add 300 mb from config maxmemory
+	cpuLimit, _ := resource.ParseQuantity("1")
 	r.Log.Info("New memory limits", "memory", memoryLimit)
 	memoryLimit.Add(memoryOverheadResource)
 	for k := range statefulSet.Spec.Template.Spec.Containers {
 		statefulSet.Spec.Template.Spec.Containers[k].Resources.Requests[corev1.ResourceMemory] = memoryLimit
 		statefulSet.Spec.Template.Spec.Containers[k].Resources.Limits[corev1.ResourceMemory] = memoryLimit
 		r.Log.Info("Stateful set container memory", "memory", statefulSet.Spec.Template.Spec.Containers[k].Resources.Limits[corev1.ResourceMemory])
+
+		statefulSet.Spec.Template.Spec.Containers[k].Resources.Requests[corev1.ResourceCPU] = cpuLimit
+		statefulSet.Spec.Template.Spec.Containers[k].Resources.Limits[corev1.ResourceCPU] = cpuLimit
+		r.Log.Info("Stateful set cpu", "cpu", statefulSet.Spec.Template.Spec.Containers[k].Resources.Limits[corev1.ResourceCPU])
+
 	}
 	return statefulSet, nil
 }
@@ -422,12 +431,29 @@ func (r *RedisClusterReconciler) GetClusterInfo(ctx context.Context, redisCluste
 }
 
 func (r *RedisClusterReconciler) UpdateClusterStatus(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
+
+	var req reconcile.Request
+	req.NamespacedName.Namespace = redisCluster.Namespace
+	req.NamespacedName.Name = redisCluster.Name
+
 	r.Log.Info("Updating cluster status", "status", redisCluster.Status.Status, "nodes", redisCluster.Status.Nodes)
-	err := r.Client.Status().Update(ctx, redisCluster)
-	if err != nil {
-		r.Log.Error(err, "Error updating cluster status")
-	}
-	return err
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		time.Sleep(time.Second * 1)
+		// get a fresh rediscluster to minimize conflicts
+		refreshedRedisCluster := v1alpha1.RedisCluster{}
+		err := r.Client.Get(ctx, types.NamespacedName{Namespace: redisCluster.Namespace, Name: redisCluster.Name}, &refreshedRedisCluster)
+		if err != nil {
+			r.Log.Error(err, "Error getting a refreshed RedisCluster before updating it. It may have been deleted?")
+			return err
+		}
+		// update the slots
+		refreshedRedisCluster.Status.Slots = redisCluster.Status.Slots
+		refreshedRedisCluster.Status.Nodes = redisCluster.Status.Nodes
+		refreshedRedisCluster.Status.Status = redisCluster.Status.Status
+		var updateErr = r.Client.Status().Update(ctx, &refreshedRedisCluster)
+		return updateErr
+	})
 }
 
 func containsString(slice []string, s string) bool {

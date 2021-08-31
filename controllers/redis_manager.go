@@ -538,12 +538,7 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 				if nodeId == nil {
 					return nil, errors.New("Can't fetch node id")
 				}
-				isMaster := redisClient.Do(ctx, "cluster", "slaves", nodeId).Val().(string)
 
-				// The return value is empty with no chars if the given node is a master.
-				if strings.ContainsAny(isMaster, "abcdefghijklmnopqrstuvw") {
-					return nil, errors.New(fmt.Sprintf("There is a slave node in the cluster! ID: %s", nodeId))
-				}
 				readyNodes[nodeId.(string)] = &v1alpha1.RedisNode{IP: pod.Status.PodIP, NodeName: pod.GetName(), NodeID: nodeId.(string)}
 			}
 		}
