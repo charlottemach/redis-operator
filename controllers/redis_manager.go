@@ -148,7 +148,10 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 	if sset_err != nil {
 		return err
 	}
-	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
+	readyNodes, err := r.GetReadyNodes(ctx, redisCluster)
+	if err != nil {
+		return err
+	}
 	currSsetReplicas := *(sset.Spec.Replicas)
 	redisCluster.Status.Slots = r.GetSlotsRanges(redisCluster.Spec.Replicas)
 	// scaling down: if data migration takes place, move slots
@@ -372,7 +375,10 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 	slotsMap := redisCluster.Status.Slots
 
 	// get ready nodes
-	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
+	readyNodes, err := r.GetReadyNodes(ctx, redisCluster)
+	if err != nil {
+		return err
+	}
 	// ensure there are enough ready nodes for allocation
 	if len(readyNodes) < len(slotsMap) {
 		return fmt.Errorf("Got %d readyNodes, but need %d readyNodes to satisfy slots map allocation.", len(readyNodes), len(slotsMap))
@@ -532,6 +538,7 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 				if nodeId == nil {
 					return nil, errors.New("Can't fetch node id")
 				}
+
 				readyNodes[nodeId.(string)] = &v1alpha1.RedisNode{IP: pod.Status.PodIP, NodeName: pod.GetName(), NodeID: nodeId.(string)}
 			}
 		}

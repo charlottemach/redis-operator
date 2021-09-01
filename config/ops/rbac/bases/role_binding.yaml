@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: redis-operator-rolebinding]
+  name: redis-operator-rolebinding
   namespace: system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
