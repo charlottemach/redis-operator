@@ -31,6 +31,8 @@ BUNDLE_IMG ?= controller-bundle:$(VERSION)
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 
+CHANNELS ?= alpha,beta
+
 # Image REF in bundle image
 # Can be overwritten with make bundle IMAGE_REF=<some-registry>/<project-name-bundle>:<tag>
 IMAGE_REF ?= $(IMG)
@@ -144,7 +146,7 @@ bundle: manifests kustomize
 	rm -rf bundle/metadata/*
 	operator-sdk generate kustomize manifests -q
 	cd config/apps && $(KUSTOMIZE) edit set image ghcr.io/containersolutions/redis-operator=$(IMAGE_REF)
-	$(KUSTOMIZE) build config | operator-sdk generate bundle -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
+	$(KUSTOMIZE) build config | operator-sdk generate bundle -q --overwrite --channels $(CHANNELS) --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 	operator-sdk bundle validate ./bundle
 
 .PHONY: bundle-build ## Build the bundle image.
