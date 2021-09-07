@@ -152,6 +152,9 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		}
 	}
 
+	// TODO compare resources and image tags between rdcl and statefulset and apply new resource to statefulset if they have changed
+	// TODO Zero downtime update.
+
 	// check the cluster state and slots allocated. if states is ok, we can reset the status
 	r.Log.Info("ReconcileClusterObject", "state", redisCluster.Status.Status)
 	// Update slots ranges
