@@ -158,6 +158,119 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	redisCluster.Status.Slots = r.GetSlotsRanges(redisCluster.Spec.Replicas)
 	redisCluster.Status.Nodes, err = r.GetReadyNodes(ctx, redisCluster)
 
+	desiredRedisClusterReplicas := redisCluster.Spec.Replicas
+	statefulSetReplicas := *stateful_set.Spec.Replicas
+
+	if desiredRedisClusterReplicas != statefulSetReplicas && redisCluster.Status.Status == v1alpha1.StatusReady {
+		r.UpdateScalingStatus(ctx, redisCluster)
+		// scale the cluster up or down
+		if desiredRedisClusterReplicas > statefulSetReplicas {
+			// SCALING UP
+			// 1 Scale up (adjust statefulset)
+			// Wait for ALL ready
+			// Cluster meet
+			// Rebalance
+
+			// update status field on rdcl
+			stateful_set.Spec.Replicas = &desiredRedisClusterReplicas
+			r.Log.Info("ScaleCluster UP - updating statefulset replicas", "newsize", stateful_set.Spec.Replicas)
+
+			// TODO: Make this update conflict safe
+			err := r.Client.Update(ctx, stateful_set)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+
+			var readyNodes map[string]*v1alpha1.RedisNode
+			var readyNodeCount int32 = 0
+			for readyNodeCount != desiredRedisClusterReplicas {
+				time.Sleep(2 * time.Second)
+				readyNodes, err := r.GetReadyNodes(ctx, redisCluster)
+				if err != nil {
+					return ctrl.Result{}, err
+				}
+				readyNodeCount = int32(len(readyNodes))
+			}
+			r.Log.Info("Ready nodes count is:", "readynodes", readyNodeCount)
+			for _, v := range readyNodes {
+				r.Log.Info("Node: ", "node id", v.NodeID)
+				r.Log.Info("NodeIP: ", "node ip", v.IP)
+			}
+			readyNodes, err = r.GetReadyNodes(ctx, redisCluster)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			r.Log.Info("All nodes are ready. Running ClusterMeet")
+
+			cmErr := r.ClusterMeet(ctx, readyNodes, redisCluster)
+			if cmErr != nil {
+				return ctrl.Result{}, cmErr
+			}
+
+			r.Log.Info("Rebalancing Cluster")
+			rErr := r.RebalanceClusterRedisNativeScaleUp(ctx, redisCluster, readyNodes)
+			if rErr != nil {
+				return ctrl.Result{}, rErr
+			}
+
+			r.Log.Info("Rebalance done")
+
+		} else if desiredRedisClusterReplicas < statefulSetReplicas {
+			// down
+
+			// Identify nodes to be forgotten
+			// Rebalance cluster with to-be-forgotten weight=0
+			// Forget nodes
+			// Adjust statefulset
+			r.Log.Info("ScaleCluster DOWN - ", "newsize", desiredRedisClusterReplicas)
+
+			nodesToRemoveCount := statefulSetReplicas - desiredRedisClusterReplicas
+			readyNodes, err := r.GetReadyNodes(ctx, redisCluster)
+			readyNodesLength := int32(len(readyNodes))
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			//
+			nodesToRemove := make(map[string]*v1alpha1.RedisNode, nodesToRemoveCount)
+			var remainingNode *v1alpha1.RedisNode
+			var counter int32 = 0
+			var picked bool = false
+			r.Log.Info("Determining nodes to-be-removed")
+			for key, val := range readyNodes {
+				counter++
+				if counter > (readyNodesLength - nodesToRemoveCount) {
+					nodesToRemove[key] = val
+				} else if !picked {
+					// pick one node that'll remain to use as command platform
+					remainingNode = readyNodes[key]
+					picked = true
+				}
+			}
+
+			if nodesToRemoveCount != int32(len(nodesToRemove)) {
+				r.Log.Info("ERROR finding nodes to remove!")
+			}
+
+			balanceErr := r.RebalanceClusterRedisNativeScaleDown(ctx, redisCluster, nodesToRemove, remainingNode)
+			if balanceErr != nil {
+				return ctrl.Result{}, balanceErr
+			}
+
+			r.ForgetUnnecessarySpecificNodes(ctx, redisCluster, nodesToRemove, remainingNode)
+
+			stateful_set.Spec.Replicas = &desiredRedisClusterReplicas
+			r.Log.Info("ScaleCluster UP - updating statefulset replicas", "newsize", stateful_set.Spec.Replicas)
+
+			// TODO: Make this update conflict safe
+			statefulSetUpdateErr := r.Client.Update(ctx, stateful_set)
+			if err != nil {
+				return ctrl.Result{}, statefulSetUpdateErr
+			}
+		}
+
+		r.UpdateScalingStatus(ctx, redisCluster)
+	}
+
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -174,24 +287,24 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	case v1alpha1.StatusReady:
 		r.CheckConfigurationStatus(ctx, redisCluster)
 		r.UpdateScalingStatus(ctx, redisCluster)
-	case v1alpha1.StatusScalingDown:
-		err := r.ScaleCluster(ctx, redisCluster)
-		if err != nil {
-			r.Log.Error(err, "Error when scaling down")
-			redisCluster.Status.Status = v1alpha1.StatusError
-			break
-		}
-		r.UpdateScalingStatus(ctx, redisCluster)
-		requeue = true
-	case v1alpha1.StatusScalingUp:
-		err := r.ScaleCluster(ctx, redisCluster)
-		if err != nil {
-			r.Log.Error(err, "Error when scaling up")
-			redisCluster.Status.Status = v1alpha1.StatusError
-			break
-		}
-		r.UpdateScalingStatus(ctx, redisCluster)
-		requeue = true
+	// case v1alpha1.StatusScalingDown:
+	// 	err := r.ScaleCluster(ctx, redisCluster)
+	// 	if err != nil {
+	// 		r.Log.Error(err, "Error when scaling down")
+	// 		redisCluster.Status.Status = v1alpha1.StatusError
+	// 		break
+	// 	}
+	// 	r.UpdateScalingStatus(ctx, redisCluster)
+	// 	requeue = true
+	// case v1alpha1.StatusScalingUp:
+	// 	err := r.ScaleCluster(ctx, redisCluster)
+	// 	if err != nil {
+	// 		r.Log.Error(err, "Error when scaling up")
+	// 		redisCluster.Status.Status = v1alpha1.StatusError
+	// 		break
+	// 	}
+	// 	r.UpdateScalingStatus(ctx, redisCluster)
+	// 	requeue = true
 	case v1alpha1.StatusError:
 		// todo: try to recover from error. Check configuration status?
 		r.Recorder.Event(redisCluster, "Warning", "ClusterError", "Cluster error recorded.")

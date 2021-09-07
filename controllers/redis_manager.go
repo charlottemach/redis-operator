@@ -142,6 +142,51 @@ func (r *RedisClusterReconciler) UpdateScalingStatus(ctx context.Context, redisC
 	return nil
 }
 
+func (r *RedisClusterReconciler) ScaleClusterRedisNative(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
+	var err error
+	sset_err, sset := r.FindExistingStatefulSet(ctx, controllerruntime.Request{NamespacedName: types.NamespacedName{Name: redisCluster.Name, Namespace: redisCluster.Namespace}})
+	if sset_err != nil {
+		return err
+	}
+	readyNodes, err := r.GetReadyNodes(ctx, redisCluster)
+	if err != nil {
+		return err
+	}
+	currSsetReplicas := *(sset.Spec.Replicas)
+	redisCluster.Status.Slots = r.GetSlotsRanges(redisCluster.Spec.Replicas)
+	// scaling down: if data migration takes place, move slots
+	if redisCluster.Spec.Replicas < currSsetReplicas {
+		// downscaling, migrate nodes
+		r.Log.Info("redisCluster.Spec.Replicas < statefulset.Spec.Replicas, downscaling", "rc.s.r", redisCluster.Spec.Replicas, "sset.s.r", currSsetReplicas)
+		err = r.RebalanceCluster(ctx, redisCluster)
+
+		if err != nil {
+			r.Log.Error(err, "Issues with rebalancing cluster when scaling down")
+			return err
+		}
+		r.ForgetUnnecessaryNodes(ctx, redisCluster)
+	}
+	//  scaling up and all pods became ready
+	if int(redisCluster.Spec.Replicas) == len(readyNodes) {
+		r.Log.Info("ScaleCluster - len(nodes) == replicas. Running forget unnecessary nodes, clustermeet, rebalance")
+
+		r.ClusterMeet(ctx, readyNodes, redisCluster)
+		time.Sleep(10 * time.Second)
+		err = r.RebalanceCluster(ctx, redisCluster)
+
+		if err != nil {
+			r.Log.Error(err, "ScaleCluster - issue with rebalancing cluster when scaling up")
+			return err
+		}
+	}
+
+	newSize := redisCluster.Spec.Replicas
+	sset.Spec.Replicas = &newSize
+	r.Log.Info("ScaleCluster - updating statefulset replicas", "newsize", newSize)
+	r.Client.Update(ctx, sset)
+	return nil
+}
+
 func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
 	var err error
 	sset_err, sset := r.FindExistingStatefulSet(ctx, controllerruntime.Request{NamespacedName: types.NamespacedName{Name: redisCluster.Name, Namespace: redisCluster.Namespace}})
@@ -335,6 +380,25 @@ func (r *RedisClusterReconciler) NodesBySequence(nodes map[string]*v1alpha1.Redi
 	return nodesBySequence, nil
 }
 
+func (r *RedisClusterReconciler) ForgetUnnecessarySpecificNodes(ctx context.Context, redisCluster *v1alpha1.RedisCluster, nodesToRemove map[string]*v1alpha1.RedisNode, remainingNode *v1alpha1.RedisNode) {
+	for _, forgottenNode := range nodesToRemove {
+		client, err := r.GetRedisClientForNode(ctx, remainingNode.NodeID, redisCluster)
+		if err != nil {
+			r.Log.Error(err, "Node forget failed", "target", remainingNode, "forgottenNode", forgottenNode)
+			continue
+		}
+		err = client.Do(ctx, "cluster", "forget", forgottenNode.NodeID).Err()
+		if err != nil {
+			r.Log.Error(err, "Node forget failed", "target", remainingNode, "forgottenNode", forgottenNode)
+		}
+
+	}
+
+	for _, node := range nodesToRemove {
+		r.RemoveRedisClientForNode(node.NodeID, ctx, redisCluster)
+	}
+}
+
 func (r *RedisClusterReconciler) ForgetUnnecessaryNodes(ctx context.Context, redisCluster *v1alpha1.RedisCluster) {
 	readyNodes, _ := r.GetReadyNodes(ctx, redisCluster)
 	remainingNodes := make([]*v1alpha1.RedisNode, 0)
@@ -364,6 +428,40 @@ func (r *RedisClusterReconciler) ForgetUnnecessaryNodes(ctx context.Context, red
 	for _, node := range overstayedTheirWelcomeNodes {
 		r.RemoveRedisClientForNode(node.NodeID, ctx, redisCluster)
 	}
+}
+
+func (r *RedisClusterReconciler) AppendClusterWeightStrings(nodes map[string]*v1alpha1.RedisNode) string {
+
+	var returnString string = ""
+	for _, val := range nodes {
+		returnString = returnString + val.NodeID + "=0 "
+	}
+	return returnString
+
+}
+
+func (r *RedisClusterReconciler) RebalanceClusterRedisNativeScaleDown(ctx context.Context, redisCluster *v1alpha1.RedisCluster, nodesToRemove map[string]*v1alpha1.RedisNode, remainingNode *v1alpha1.RedisNode) error {
+	var err error
+
+	cmdClient, err := r.GetRedisClientForNode(ctx, remainingNode.NodeID, redisCluster)
+	if err != nil {
+		return err
+	}
+	weightString := r.AppendClusterWeightStrings(nodesToRemove)
+	var nodeString string = remainingNode.IP + ":" + fmt.Sprint(redis.RedisCommPort)
+	err = cmdClient.Do(ctx, "--cluster", "rebalance", nodeString, "--cluster-use-empty-masters", "--cluster-weight", weightString).Err()
+
+	return err
+}
+
+func (r *RedisClusterReconciler) RebalanceClusterRedisNativeScaleUp(ctx context.Context, redisCluster *v1alpha1.RedisCluster, clusterNodes map[string]*v1alpha1.RedisNode) error {
+	var err error
+	nodesBySequence, _ := r.NodesBySequence(clusterNodes)
+	cmdNode := nodesBySequence[0]
+	cmdClient, err := r.GetRedisClientForNode(ctx, cmdNode.NodeID, redisCluster)
+	var nodeString string = cmdNode.IP + ":" + fmt.Sprint(redis.RedisCommPort)
+	err = cmdClient.Do(ctx, "--cluster", "rebalance", nodeString, "--cluster-use-empty-masters").Err()
+	return err
 }
 
 func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
