@@ -96,20 +96,13 @@ func (self *RedisTrib) GetNodeByName(name string) (node *ClusterNode) {
 // cluster.
 func (self *RedisTrib) GetNodeByAbbreviatedName(name string) (n *ClusterNode) {
 	length := len(name)
-	var candidates = []*ClusterNode{}
-
 	name = strings.ToLower(name)
 	for _, node := range self.Nodes() {
 		if node.Name()[0:length] == name {
-			candidates = append(candidates, node)
+			return node
 		}
 	}
-
-	if len(candidates) != 1 {
-		return nil
-	}
-
-	return candidates[0]
+	return nil
 }
 
 // This function returns the master that has the least number of replicas
@@ -203,14 +196,17 @@ func (self *RedisTrib) CheckConfigConsistency() {
 func (self *RedisTrib) isConfigConsistent() bool {
 	clean := true
 	oldSig := ""
+	logrus.Printf("Number of nodes in the cluster: %s", len(self.Nodes()))
 	for _, node := range self.Nodes() {
 		if len(oldSig) == 0 {
 			oldSig = node.GetConfigSignature()
 		} else {
 			newSig := node.GetConfigSignature()
+			logrus.Printf("OldSig: %s", oldSig)
+			logrus.Printf("NewSig: %s", newSig)
 			if oldSig != newSig {
-				//logrus.Errorf("Signatures don't match. Error in Config.")
-				//logrus.Errorf("Error came up when checking node %s", node.String())
+				logrus.Errorf("Signatures don't match. Error in Config.")
+				logrus.Errorf("Error came up when checking node %s", node.String())
 				clean = false
 				break
 			}
@@ -551,8 +547,11 @@ func (self *RedisTrib) LoadClusterInfoFromNode(addr string) error {
 	if err := node.LoadInfo(true); err != nil {
 		return fmt.Errorf("load info from node %s failed", node)
 	}
+	logrus.Printf("Length of nodes is before we add any is: %s", len(self.nodes))
+
 	self.AddNode(node)
 
+	logrus.Printf("Of friends is: %s", len(node.Friends()))
 	for _, n := range node.Friends() {
 		if n.HasFlag("noaddr") || n.HasFlag("disconnected") || n.HasFlag("fail") {
 			continue
@@ -565,10 +564,17 @@ func (self *RedisTrib) LoadClusterInfoFromNode(addr string) error {
 		}
 
 		fnode.LoadInfo(false)
-		self.AddNode(fnode)
+
+		if self.GetNodeByName(fnode.Name()) == nil {
+			if fnode.Name() != node.Name() {
+				self.AddNode(fnode)
+			}
+		}
+
 	}
 
 	self.PopulateNodesReplicasInfo()
+	logrus.Printf("# of nodes after all added: %s", len(self.Nodes()))
 	return nil
 }
 

@@ -32,6 +32,7 @@ import (
 
 	"github.com/containersolutions/redis-operator/api/v1alpha1"
 	redis "github.com/containersolutions/redis-operator/internal/redis"
+	redistrib "github.com/containersolutions/redis-operator/internal/redistrib"
 	"k8s.io/apimachinery/pkg/labels"
 )
 
@@ -454,13 +455,28 @@ func (r *RedisClusterReconciler) RebalanceClusterRedisNativeScaleDown(ctx contex
 	return err
 }
 
+func assembleWeights(clusterNodes map[string]*v1alpha1.RedisNode, weight int) []string {
+	weights := make([]string, len(clusterNodes))
+	var i int = 0
+	for _, val := range clusterNodes {
+		weights[i] = val.NodeID + "=" + strconv.Itoa(weight)
+		i++
+	}
+	return weights
+}
+
 func (r *RedisClusterReconciler) RebalanceClusterRedisNativeScaleUp(ctx context.Context, redisCluster *v1alpha1.RedisCluster, clusterNodes map[string]*v1alpha1.RedisNode) error {
 	var err error
 	nodesBySequence, _ := r.NodesBySequence(clusterNodes)
 	cmdNode := nodesBySequence[0]
-	cmdClient, err := r.GetRedisClientForNode(ctx, cmdNode.NodeID, redisCluster)
-	var nodeString string = cmdNode.IP + ":" + fmt.Sprint(redis.RedisCommPort)
-	err = cmdClient.Do(ctx, "--cluster", "rebalance", nodeString, "--cluster-use-empty-masters").Err()
+	//cmdClient, err := r.GetRedisClientForNode(ctx, cmdNode.NodeID, redisCluster)
+	trib := redistrib.NewRedisTrib()
+	var addr string = cmdNode.IP + ":" + strconv.Itoa(redis.RedisCommPort)
+
+	ws := assembleWeights(clusterNodes, 1)
+	err = trib.RebalanceClusterCmdNew(addr, ws, true, 2, 10, false, true, false)
+	// var nodeString string = cmdNode.IP + ":" + fmt.Sprint(redis.RedisCommPort)
+	// err = cmdClient.Do(ctx, "--cluster", "rebalance", nodeString, "--cluster-use-empty-masters").Err()
 	return err
 }
 

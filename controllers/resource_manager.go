@@ -205,9 +205,14 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 			}
 			r.Log.Info("All nodes are ready. Running ClusterMeet")
 
-			cmErr := r.ClusterMeet(ctx, readyNodes, redisCluster)
-			if cmErr != nil {
-				return ctrl.Result{}, cmErr
+			// cmErr := r.ClusterMeet(ctx, readyNodes, redisCluster)
+			// if cmErr != nil {
+			// 	return ctrl.Result{}, cmErr
+			// }
+			r.Log.Info("Configuring RedisCluster")
+			configErr := r.ConfigureRedisCluster(ctx, redisCluster)
+			if configErr != nil {
+				return ctrl.Result{}, configErr
 			}
 
 			r.Log.Info("Rebalancing Cluster")

@@ -54,3 +54,15 @@ func (self *RedisTrib) FixClusterCmd(context *cli.Context) error {
 	self.CheckCluster(false)
 	return nil
 }
+
+func (self *RedisTrib) FixClusterCmdNew(addr string, timeout int) error {
+
+	self.SetFix(true)
+	self.SetTimeout(timeout)
+	if err := self.LoadClusterInfoFromNode(addr); err != nil {
+		return err
+	}
+
+	self.CheckCluster(false)
+	return nil
+}
