@@ -54,6 +54,10 @@ func (r *RedisClusterReconciler) GetRedisClusterNsName(o client.Object) string {
 	return o.GetNamespace() + "/" + o.GetLabels()[redis.RedisClusterLabel]
 }
 
+const (
+	MIGRATE_TIMOUT = 6000
+)
+
 func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req ctrl.Request, redisCluster *v1alpha1.RedisCluster) (ctrl.Result, error) {
 	currentStatus := redisCluster.Status
 	var auth = &corev1.Secret{}

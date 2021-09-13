@@ -266,7 +266,7 @@ func CreateRedisCluster() *v1alpha1.RedisCluster {
 			Replicas: 1,
 			Config: `
 			maxmemory 500mb
-			
+
 	`,
 			Monitoring: &corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
