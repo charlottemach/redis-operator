@@ -9,4 +9,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: redis-operator-sa
-  namespace: system
+  namespace: default

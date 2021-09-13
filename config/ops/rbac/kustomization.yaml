@@ -5,4 +5,4 @@ resources:
 - bases/role_binding.yaml
 - bases/service_account.yaml
 
-namespace: devops-redis-operator
+namespace: default
