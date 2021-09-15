@@ -373,7 +373,7 @@ func (r *RedisClusterReconciler) GetClusterNodes(ctx context.Context, redisClust
 	return nodeList, nil
 }
 
-func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, source, target *redis.ClusterNode, nodes map[string]*redis.ClusterNode, slot int) error {
+func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, redisCluster *v1alpha1.RedisCluster, source, target *redis.ClusterNode, nodes map[string]*redis.ClusterNode, slot int) error {
 	_, err := source.Call("CLUSTER", "setslot", slot, "migrating", target.Name()).Text()
 	if err != nil {
 		r.Log.Error(err, "Failed to set slot migrating", "node", source.Name(), "target", target.Name())
@@ -396,32 +396,47 @@ func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, source, target *r
 			break
 		}
 
-		// XXX: migrate parameters check
-		var cmd []interface{}
+		if redisCluster.Spec.PurgeKeysOnRebalance {
+			// XXX: migrate parameters check
+			var cmd []interface{}
 
-		cmd = append(cmd, "migrate", target.Host(), target.Port(), "", 0, MIGRATE_TIMOUT, "KEYS")
-		for _, key := range keys {
-			cmd = append(cmd, key)
-		}
-		_, err = source.Call(cmd...).Text()
+			cmd = append(cmd, "DEL")
+			for _, key := range keys {
+				cmd = append(cmd, key)
+			}
+			_, err := source.Call(cmd...).Result()
+			if err != nil {
+				r.Log.Error(err, "Failed to delete keys", "cmd", cmd)
+				return err
+			}
+		} else {
+			// XXX: migrate parameters check
+			var cmd []interface{}
 
-		if err != nil {
-			// We want this error to propgate through, as we have a secondary test to try fixing the error
-			r.Log.Error(err, "Migrate Failed", "keys", keys, "node", target.Name())
-		}
-		if err != nil {
-			errinfo := err.Error()
-			if strings.Contains(errinfo, "BUSYKEY") {
-				// XXX: migrate parameters check
-				cmd = cmd[:0]
-				cmd = append(cmd, "migrate", target.Host(), target.Port(), "", 0, MIGRATE_TIMOUT, "REPLACE", "KEYS")
-				for _, key := range keys {
-					cmd = append(cmd, key)
-				}
-				err = source.Call(cmd...).Err()
-				if err != nil {
-					r.Log.Error(err, "Could not move keys to new node", "keys", keys, "source", source.Name(), "target", target.Name())
-					return err
+			cmd = append(cmd, "migrate", target.Host(), target.Port(), "", 0, MIGRATE_TIMOUT, "KEYS")
+			for _, key := range keys {
+				cmd = append(cmd, key)
+			}
+			_, err = source.Call(cmd...).Text()
+
+			if err != nil {
+				// We want this error to propgate through, as we have a secondary test to try fixing the error
+				r.Log.Error(err, "Migrate Failed", "keys", keys, "node", target.Name())
+			}
+			if err != nil {
+				errinfo := err.Error()
+				if strings.Contains(errinfo, "BUSYKEY") {
+					// XXX: migrate parameters check
+					cmd = cmd[:0]
+					cmd = append(cmd, "migrate", target.Host(), target.Port(), "", 0, MIGRATE_TIMOUT, "REPLACE", "KEYS")
+					for _, key := range keys {
+						cmd = append(cmd, key)
+					}
+					err = source.Call(cmd...).Err()
+					if err != nil {
+						r.Log.Error(err, "Could not move keys to new node", "keys", keys, "source", source.Name(), "target", target.Name())
+						return err
+					}
 				}
 			}
 		}
@@ -450,7 +465,7 @@ func (r *RedisClusterReconciler) EnsureClusterSlotsStable(ctx context.Context, r
 	for _, node := range nodeList {
 		r.Log.Info("Fixing incomplete migration", "node", node.Name(), "importing", node.Importing())
 		for slot, sourceId := range node.Importing() {
-			err = r.MoveSlot(ctx, nodeList[sourceId], nodeList[node.Name()], nodeList, slot)
+			err = r.MoveSlot(ctx, redisCluster, nodeList[sourceId], nodeList[node.Name()], nodeList, slot)
 			if err != nil {
 				r.Log.Error(err, "Cannot move slot", "slot", slot, "source", sourceId, "target", node.Name())
 				return err
@@ -488,7 +503,7 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 		source := nodeList[moveSequence.From]
 		target := nodeList[moveSequence.To]
 		for _, slot := range moveSequence.Slots {
-			err := r.MoveSlot(ctx, source, target, nodeList, slot)
+			err := r.MoveSlot(ctx, redisCluster, source, target, nodeList, slot)
 			if err != nil {
 				r.Log.Error(err, "Cannot move slot", "slot", slot, "source", source.Name(), "target", target.Name())
 				return err
