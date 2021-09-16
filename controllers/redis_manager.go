@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	//"golang.org/x/tools/godoc/redirect"
@@ -406,8 +407,18 @@ func (r *RedisClusterReconciler) MoveSlot(ctx context.Context, redisCluster *v1a
 			}
 			_, err := source.Call(cmd...).Result()
 			if err != nil {
-				r.Log.Error(err, "Failed to delete keys", "cmd", cmd)
-				return err
+				if !strings.Contains(err.Error(), "ASK") {
+					// If we get an ask redirection,
+					// it means that the cluster wants us to ask the new node most probably.
+					// When deleting keys, we do it to make the migration faster.
+					// If we run against the new node, there is no good reason for deleting the keys anymore,
+					// as the primary purpose of the delete has been served.
+					// We can therefor ignore the ASK redirection, and simply continue to the next piece of logic.
+					// In this case we got a different error, and definitely want to fail hard and fast
+					// to void putting the Redis cluster in an unfixable state.
+					r.Log.Error(err, "Failed to delete keys", "cmd", cmd)
+					return err
+				}
 			}
 		} else {
 			// XXX: migrate parameters check
@@ -499,7 +510,8 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 	slotMoveMap := CalculateSlotMoveMap(slotMap, moveMapOptions)
 	slotMoveSequence := CalculateMoveSequence(slotMap, slotMoveMap, moveMapOptions)
 
-	for _, moveSequence := range slotMoveSequence {
+	executeMoveSequence := func(waitGroup *sync.WaitGroup, moveSequence MoveSequence) error {
+		defer waitGroup.Done()
 		source := nodeList[moveSequence.From]
 		target := nodeList[moveSequence.To]
 		for _, slot := range moveSequence.Slots {
@@ -509,8 +521,18 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 				return err
 			}
 		}
+		return nil
 	}
 
+	var waitGroup sync.WaitGroup
+	for _, moveSequence := range slotMoveSequence {
+		waitGroup.Add(1)
+		go executeMoveSequence(&waitGroup, moveSequence)
+	}
+
+	r.Log.Info("Waiting for slot moves", "nodeCount", len(slotMoveSequence))
+	waitGroup.Wait()
+	r.Log.Info("Done waiting for slot moves")
 	err := r.EnsureClusterSlotsStable(ctx, redisCluster)
 	if err != nil {
 		r.Log.Error(err, "Cannot fix slots")
