@@ -239,22 +239,6 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 		}
 		return
 	}
-	slots := r.GetClusterSlotConfiguration(ctx, redisCluster)
-	nodeips := make(map[string]string, len(readyNodes))
-	for id, node := range readyNodes {
-		nodeips[node.IP] = id
-	}
-	// Check that ips in current configuration of slots have a corresponding node IP in pods
-	r.Log.Info("CheckConfigurationStatus - checking slots ips matches", "ips", nodeips)
-	for _, slotRange := range slots {
-		addr := strings.Split(slotRange.Nodes[0].Addr, ":")
-		slotnodeid := nodeips[addr[0]]
-		if slotnodeid == "" {
-			redisCluster.Status.Status = v1alpha1.StatusConfiguring
-			r.Log.Info("CheckConfigurationStatus - slots configuration doesn't match ip address of a node, reconfiguration will apply", "expected_addr", slotRange.Nodes[0].Addr)
-			return
-		}
-	}
 
 	if slots_ok != slots_assigned {
 		redisCluster.Status.Status = v1alpha1.StatusConfiguring

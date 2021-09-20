@@ -163,7 +163,7 @@ int-test-generate:
 	kubectl kustomize config/test > config/test/tests.yaml
 
 int-test-replace: 
-	$(SED) -i 's/<IMAGE>/$(IMG)/' config/test/tests.yaml
+	$(SED) -i 's/latest/$(IMG)/' config/test/tests.yaml
 	$(SED) -i 's/default/$(NAMESPACE)/' config/test/tests.yaml
 
 int-test-clean:

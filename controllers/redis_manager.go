@@ -161,7 +161,6 @@ func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster 
 		return err
 	}
 
-
 	currSsetReplicas := *(sset.Spec.Replicas)
 	redisCluster.Status.Slots = r.GetSlotsRanges(redisCluster.Spec.Replicas)
 	// scaling down: if data migration takes place, move slots
@@ -258,24 +257,22 @@ func (r *RedisClusterReconciler) isOwnedByUs(o client.Object) bool {
 func (r *RedisClusterReconciler) ClusterMeet(ctx context.Context, nodes map[string]*v1alpha1.RedisNode, redisCluster *v1alpha1.RedisCluster) error {
 	r.Log.Info("ClusterMeet", "nodes", nodes)
 	var rdb *redisclient.Client
-	var err error
-	var alphaNode *v1alpha1.RedisNode
-	for nodeId, node := range nodes {
-		r.Log.Info("ClusterMeet single node", "node", node)
-		if alphaNode == nil {
-			alphaNode = node
-			rdb, err = r.GetRedisClientForNode(ctx, alphaNode.NodeID, redisCluster)
+
+	for srcNodeId, srcnode := range nodes {
+		for trgNodeId, trgnode := range nodes {
+			if trgNodeId == srcNodeId {
+				continue
+			}
+			r.Log.Info("ClusterMeet", "srcnode", srcnode, "trgnode", trgnode)
+			rdb, _ = r.GetRedisClientForNode(ctx, srcNodeId, redisCluster)
+			_, err := rdb.ClusterMeet(ctx, trgnode.IP, strconv.Itoa(redis.RedisCommPort)).Result()
+
 			if err != nil {
-				r.Log.Error(err, "Cluster Meet Failed", "alphaNode", alphaNode, "rdb", rdb)
+				r.Log.Error(err, "ClusterMeet failed", "nodes", srcnode)
 				return err
 			}
 		}
-		r.Log.Info("Running cluster meet", "srcnode", alphaNode.NodeID, "dstnode", nodeId)
-		_, err := rdb.ClusterMeet(ctx, node.IP, strconv.Itoa(redis.RedisCommPort)).Result()
-		if err != nil {
-			r.Log.Error(err, "ClusterMeet failed", "nodes", node)
-			return err
-		}
+
 	}
 	return nil
 }

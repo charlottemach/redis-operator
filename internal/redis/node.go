@@ -347,11 +347,11 @@ func (clusterNode *ClusterNode) LoadInfo(getfriends bool) (err error) {
 				if strings.Contains(slots, "<") {
 					slotStr := strings.Split(slots, "-<-")
 					slotId, _ := strconv.Atoi(slotStr[0][1:])
-					clusterNode.info.importing[slotId] = slotStr[1][0:len(slotStr[1]) - 1]
+					clusterNode.info.importing[slotId] = slotStr[1][0 : len(slotStr[1])-1]
 				} else if strings.Contains(slots, ">") {
 					slotStr := strings.Split(slots, "->-")
 					slotId, _ := strconv.Atoi(slotStr[0][1:])
-					clusterNode.info.migrating[slotId] = slotStr[1][0:len(slotStr[1]) - 1]
+					clusterNode.info.migrating[slotId] = slotStr[1][0 : len(slotStr[1])-1]
 				} else if strings.Contains(slots, "-") {
 					slotStr := strings.Split(slots, "-")
 					firstId, _ := strconv.Atoi(slotStr[0])

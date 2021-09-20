@@ -103,7 +103,7 @@ var _ = BeforeSuite(func() {
 	cluster = CreateRedisCluster()
 	Expect(k8sClient.Create(context.Background(), cluster)).Should(Succeed())
 	// todo: can we remove sleep?
-	time.Sleep(5000 * time.Millisecond)
+	time.Sleep(3000 * time.Millisecond)
 
 }, 60)
 
@@ -174,7 +174,7 @@ var _ = Describe("Reconciler", func() {
 					},
 				}
 				Expect(k8sClient.Create(context.Background(), scluster)).Should(Succeed())
-				time.Sleep(5 * time.Second)
+				time.Sleep(3 * time.Second)
 				sset := &v1.StatefulSet{}
 				err := k8sClient.Get(context.Background(), types.NamespacedName{Name: scluster.Name, Namespace: "default"}, sset)
 				Expect(err).ToNot(HaveOccurred())
