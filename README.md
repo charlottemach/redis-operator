@@ -25,6 +25,16 @@ kustomize build config/apps | kubectl apply -f -
 kustomize build config/samples/ | kubectl apply -f -
 ```
 
+## Cleanup
+Delete the operator and all associated resources with:
+
+```
+kustomize build config/samples/ | kubectl delete -f -
+kustomize build config/apps | kubectl delete -f -
+kustomize build config/ops/rbac | kubectl delete -f -
+kustomize build config/ops/crd | kubectl delete -f -
+```
+
 
 ## Tests
 
