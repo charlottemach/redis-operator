@@ -19,8 +19,20 @@ Manifests:
 Deploy the operator and a sample RedisCluster resource:
 
 ```
-kustomize build config/ | kubectl apply -f -
+kustomize build config/ops/crd | kubectl apply -f -
+kustomize build config/ops/rbac | kubectl apply -f -
+kustomize build config/apps | kubectl apply -f -
 kustomize build config/samples/ | kubectl apply -f -
+```
+
+## Cleanup
+Delete the operator and all associated resources with:
+
+```
+kustomize build config/samples/ | kubectl delete -f -
+kustomize build config/apps | kubectl delete -f -
+kustomize build config/ops/rbac | kubectl delete -f -
+kustomize build config/ops/crd | kubectl delete -f -
 ```
 
 
