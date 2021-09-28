@@ -162,12 +162,34 @@ func (clusterNode *ClusterNode) Slots() []int {
 	return clusterNode.info.slots
 }
 
+func (clusterNode *ClusterNode) OwnsSlot(searchSlot int) bool {
+	for _, slot := range clusterNode.info.slots {
+		if slot == searchSlot {
+			return true
+		}
+	}
+	return false
+}
+
 func (clusterNode *ClusterNode) Migrating() map[int]string {
 	return clusterNode.info.migrating
 }
 
+func (clusterNode *ClusterNode) RemoveMigrating(slot int) {
+	delete(clusterNode.info.migrating, slot)
+}
+
+func (clusterNode *ClusterNode) IsMigrating(slot int) bool {
+	_, ok := clusterNode.info.migrating[slot]
+	return ok
+}
+
 func (clusterNode *ClusterNode) Importing() map[int]string {
 	return clusterNode.info.importing
+}
+
+func (clusterNode *ClusterNode) RemoveImporting(slot int) {
+	delete(clusterNode.info.importing, slot)
 }
 
 func (clusterNode *ClusterNode) R() *redisclient.Client {
