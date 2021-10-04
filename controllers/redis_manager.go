@@ -471,129 +471,13 @@ func (r *RedisClusterReconciler) EnsureClusterSlotsStable(ctx context.Context, r
 	// Case 1: Slot is in migrating on one node, and importing in another, but might have keys left.
 	// Let's try to move the slot.
 	for _, node := range nodeList {
+		r.Log.Info("Fixing incomplete migration", "node", node.Name(), "importing", node.Importing())
 		for slot, sourceId := range node.Importing() {
-			// We should only run this, if the source node also has the slot as migrating
-			if nodeList[sourceId].IsMigrating(slot) {
-				r.Log.Info("Fixing incomplete migration of slot", "slot", slot, "source", sourceId, "destination", node.Name())
-				// The slot is both importing, and has a migrating status in the source node.
-				// This is trivial. Lets just finish moving the slot
-				err = r.MoveSlot(ctx, redisCluster, nodeList[sourceId], nodeList[node.Name()], nodeList, slot)
-				if err != nil {
-					r.Log.Error(err, "Cannot move slot", "slot", slot, "source", sourceId, "target", node.Name())
-					return err
-				}
-				// We can now remove this from the list of Importing and Migrating
-				node.RemoveImporting(slot)
-				nodeList[sourceId].RemoveMigrating(slot)
-			}
-		}
-	}
-
-	getOwner := func(nodes map[string]*redis.ClusterNode, slot int) string {
-		for ownerId, n := range nodeList {
-			if n.OwnsSlot(slot) {
-				return ownerId
-			}
-		}
-		return ""
-	}
-
-	getMigratingNode := func(nodes map[string]*redis.ClusterNode, slot int) string {
-		for migratingId, n := range nodeList {
-			if n.IsMigrating(slot) {
-				return migratingId
-			}
-		}
-		return ""
-	}
-
-	// Case 2: Slot is in importing on one node, and not migrating in it's source node.
-	// We've covered correct cases previously, so we can safely assume we have an incorrect mapping here.
-	// We'll try to find the owner of the slot, and if we can't we'll assume we own it and mark it as such
-	for _, node := range nodeList {
-		for slot, _ := range node.Importing() {
-			ownerNodeId := getOwner(nodeList, slot)
-			if ownerNodeId != "" {
-				r.Log.Info("Fixing incorrect importing of unowned slot", "slot", slot, "node", node.Name())
-				// We have found the owner.
-				// We should set the slot as stable, and mark the node everywhere
-				err := node.Call("CLUSTER", "setslot", slot, "STABLE").Err()
-				if err != nil {
-					r.Log.Error(err, "Could not set slot stable", "slot", slot, "node", node.Name())
-					return err
-				}
-				for _, n := range nodeList {
-					err := n.Call("CLUSTER", "setslot", slot, "node", ownerNodeId).Err()
-					if err != nil {
-						r.Log.Error(err, "Could not set new node for slot", "slot", slot, "node", n.Name(), "target", ownerNodeId)
-						return err
-					}
-				}
-				// Next we can remove it from our local list, for the next loops
-				node.RemoveImporting(slot)
-			}
-		}
-	}
-
-	// Case 3: Slot is in importing on one node, and has no direct owner.
-	// We need to see whether another node is trying to migrate the slot,
-	// and if not. we assume we own it.
-	for _, node := range nodeList {
-		for slot, _ := range node.Importing() {
-			ownerNodeId := getOwner(nodeList, slot)
-			if ownerNodeId == "" {
-				// No one else owns it.
-				// Is it marked as migrating ?
-				migratingNodeId := getMigratingNode(nodeList, slot)
-				if migratingNodeId != "" {
-					// We have a migrating node. Does it match us ?
-					if node.Name() == migratingNodeId {
-						r.Log.Info("Fixing incomplete migration of slot", "slot", slot, "source", migratingNodeId, "destination", node.Name())
-						// We can move the slot
-						err = r.MoveSlot(ctx, redisCluster, nodeList[migratingNodeId], nodeList[node.Name()], nodeList, slot)
-						if err != nil {
-							r.Log.Error(err, "Cannot move slot", "slot", slot, "source", migratingNodeId, "target", node.Name())
-							return err
-						}
-						// We can now remove this from the list of Importing and Migrating
-						node.RemoveImporting(slot)
-						nodeList[migratingNodeId].RemoveMigrating(slot)
-					} else {
-						// The node that is trying to migrate is not pointing at us.
-						// We should probably check ourselves for keys and move to the other node.
-						// @TODO
-					}
-				} else {
-					// No other nodes are migrating, we are probaby the owner of the slot and need to set as stable
-					r.Log.Info("Fixing incomplete importing of slot", "slot", slot, "node", node.Name())
-					err := node.Call("CLUSTER", "setslot", slot, "STABLE").Err()
-					if err != nil {
-						r.Log.Error(err, "Could not set slot stable", "slot", slot, "node", node.Name())
-						return err
-					}
-					err = node.Call("CLUSTER", "setslot", slot, "node", node.Name()).Err()
-					if err != nil {
-						r.Log.Error(err, "Could not set slot stable", "slot", slot, "node", node.Name())
-						return err
-					}
-					node.RemoveImporting(slot)
-				}
-			}
-		}
-	}
-
-	// Case 4: Slot is in migrating on one node, but no node is marked as importing.
-	// We can safely assume we wanted to move the slot, and just continue doing it.
-	for _, node := range nodeList {
-		for slot, destination := range node.Migrating() {
-			r.Log.Info("Fixing incomplete migration of slot", "slot", slot, "source", node.Name(), "destination", destination)
-			err = r.MoveSlot(ctx, redisCluster, node, nodeList[destination], nodeList, slot)
+			err = r.MoveSlot(ctx, redisCluster, nodeList[sourceId], nodeList[node.Name()], nodeList, slot)
 			if err != nil {
-				r.Log.Error(err, "Cannot move slot", "slot", slot, "source", node.Name(), "target", destination)
+				r.Log.Error(err, "Cannot move slot", "slot", slot, "source", sourceId, "target", node.Name())
 				return err
 			}
-			// We can now remove this from the list of Importing and Migrating
-			node.RemoveMigrating(slot)
 		}
 	}
 
