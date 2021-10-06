@@ -311,7 +311,7 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 		Spec: v1.DeploymentSpec{
 			Template: *rediscluster.Spec.Monitoring,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{redis.RedisClusterLabel: req.Name, "app": "monitoring"},
+				MatchLabels: map[string]string{redis.RedisClusterLabel: req.Name, redis.RedisClusterComponentLabel: "monitoring"},
 			},
 			Replicas: pointer.Int32Ptr(1),
 		},
@@ -322,7 +322,7 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 		d.Spec.Template.Labels = labels
 	}
 	d.Spec.Template.Labels[redis.RedisClusterLabel] = req.Name
-	d.Spec.Template.Labels["app"] = "monitoring"
+	d.Spec.Template.Labels[redis.RedisClusterComponentLabel] = "monitoring"
 	for k, v := range rediscluster.Spec.Monitoring.Labels {
 		d.Spec.Template.Labels[k] = v
 	}

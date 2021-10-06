@@ -18,7 +18,8 @@ import (
 
 const RedisCommPort = 6379
 const RedisGossPort = 16379
-const RedisClusterLabel = "redis-cluster-name"
+const RedisClusterLabel = "redis.containersolutions.com/redis-cluster-name"
+const RedisClusterComponentLabel = "redis.containersolutions.com/component"
 
 const TotalClusterSlots = 16384
 
@@ -73,7 +74,7 @@ func CreateStatefulSet(ctx context.Context, req ctrl.Request, spec v1alpha1.Redi
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{RedisClusterLabel: req.Name, "app": "redis"},
+					Labels: map[string]string{RedisClusterLabel: req.Name, RedisClusterComponentLabel: "redis"},
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -175,7 +176,7 @@ func CreateService(Namespace, Name string, labels map[string]string) *corev1.Ser
 					},
 				},
 			},
-			Selector:  map[string]string{RedisClusterLabel: Name, "app": "redis"},
+			Selector:  map[string]string{RedisClusterLabel: Name, RedisClusterComponentLabel: "redis"},
 			ClusterIP: "None",
 		},
 	}
