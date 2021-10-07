@@ -5,7 +5,27 @@
 ## Purpose
 
 Quickly provision Redis cluster environments in Kubernetes or Openshift.
+
+The easiest way to run the operator is to run make command:
+```
+make IMG=ghcr.io/containersolutions/redis-operator:latest NAMESPACE=redis-operator  int-test
+```
+
+This command will create the namespace `redis-operator` and deploy the latest tag of the Redis operator to that namespace, as well as creating a sample RedisCluster resource.
+
+Make command will generate the following file: `config/tests/test.yml` that contains all resources needed to run the Redis operator (including CRD, Roles and RoleBindings) and the sample cluster. 
+To clean-up everything after testing, run the following command:
+```
+make IMG=ghcr.io/containersolutions/redis-operator:latest NAMESPACE=redis-operator  int-test-clean
+```
+This will delete the namespace and all resources associated with it. 
+NB! Don't pass the namespace with any workloads running, as the makefile will delete the whole namespace! This command is suitable for quick testing in an insolated namespace.
+
 The operator relies on Redis cluster functionality to serve client requests.
+
+There are 2 ways to run the operator.
+For quick tests, it's easier to run the deployment using Makefile.
+
 
 ## Folder structure
 
@@ -47,7 +67,6 @@ kustomize build config/apps | kubectl delete -f -
 kustomize build config/ops/rbac | kubectl delete -f -
 kustomize build config/ops/crd | kubectl delete -f -
 ```
-
 
 ## Tests
 
