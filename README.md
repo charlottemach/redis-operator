@@ -23,10 +23,6 @@ NB! Don't pass the namespace with any workloads running, as the makefile will de
 
 The operator relies on Redis cluster functionality to serve client requests.
 
-There are 2 ways to run the operator.
-For quick tests, it's easier to run the deployment using Makefile.
-
-
 ## Folder structure
 
 The `config` folder contains all necessary kubernetes and [kustomize](https://kustomize.io) manifests
