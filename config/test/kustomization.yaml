@@ -41,15 +41,9 @@ patchesJson6902:
     version: v1
 
 resources:
-  - resources/namespace.yaml
-
-patchesStrategicMerge:
-- image.yaml
-  
-bases:
+- resources/namespace.yaml
 - ../apps
 - ../ops/rbac
 - ../samples
 
 namespace: default
-

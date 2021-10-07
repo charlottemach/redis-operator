@@ -31,8 +31,6 @@ BUNDLE_IMG ?= controller-bundle:$(VERSION)
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 
-REGISTRY ?= ghcr.io/containersolutions/redis-operator
-
 CHANNELS ?= alpha,beta
 
 # Image REF in bundle image
@@ -99,10 +97,10 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 docker-build: test ## Build docker image with the manager.
-	docker build -t ${REGISTRY}:${IMG} .
+	docker build -t ${IMG} .
 
 docker-push: ## Push docker image with the manager.
-	docker push ${REGISTRY}:${IMG}
+	docker push ${IMG}
 
 ##@ Deployment
 
@@ -118,7 +116,6 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/apps/ | kubectl delete -f -
-
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
@@ -162,11 +159,11 @@ bundle-push:
 SED = $(shell which sed)
 
 int-test-generate:
-	kubectl kustomize config/test > config/test/tests.yaml
+	cd config/test; $(KUSTOMIZE) edit set image ghcr.io/containersolutions/redis-operator=${IMG}; \
+	kubectl kustomize > tests.yaml
 
 int-test-replace: 
-	$(SED) -i 's/latest/$(IMG)/' config/test/tests.yaml
-	$(SED) -i 's/default/$(NAMESPACE)/' config/test/tests.yaml
+	$(SED) -i 's#default#$(NAMESPACE)#' config/test/tests.yaml
 
 int-test-clean:
 	-kubectl delete -f config/test/tests.yaml
