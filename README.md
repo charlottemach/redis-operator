@@ -6,6 +6,25 @@
 
 Quickly provision Redis cluster environments in Kubernetes or Openshift.
 
+The operator relies on Redis cluster functionality to serve client requests.
+
+## Folder structure
+
+The `config` folder contains all necessary kubernetes and [kustomize](https://kustomize.io) manifests
+
+Manifests:
+* `config/ops/rbac` - RBAC manifests
+* `config/ops/crd` - CRD manifests
+* `config/apps/` - Operator deployment
+* `config/samples/` - Example RedisCluster deployment
+
+## How to run the operator
+
+### Prerequisites
+1. make
+2. kustomize
+3. kubectl with configured access to create CRD, namespaces, deployments
+
 The easiest way to run the operator is to run make command:
 ```
 make IMG=ghcr.io/containersolutions/redis-operator:latest NAMESPACE=redis-operator  int-test
@@ -21,19 +40,7 @@ make IMG=ghcr.io/containersolutions/redis-operator:latest NAMESPACE=redis-operat
 This will delete the namespace and all resources associated with it. 
 NB! Don't pass the namespace with any workloads running, as the makefile will delete the whole namespace! This command is suitable for quick testing in an insolated namespace.
 
-The operator relies on Redis cluster functionality to serve client requests.
-
-## Folder structure
-
-The `config` folder contains all necessary kubernetes and [kustomize](https://kustomize.io) manifests
-
-Manifests:
-* `config/ops/rbac` - RBAC manifests
-* `config/ops/crd` - CRD manifests
-* `config/apps/` - Operator deployment
-* `config/samples/` - Example RedisCluster deployment
-
-## How to run the operator
+Alternatively, manually deploying manifests from the `config` folder.
 
 1. Create a namespace to deploy your redis operator in
 
