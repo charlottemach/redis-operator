@@ -7,8 +7,9 @@
 Quickly provision Redis cluster environments in Kubernetes or Openshift.
 The operator relies on Redis cluster functionality to serve client requests.
 
-## How to run
-To quickly run against an existing cluster, `config` folder contains all necessary resources
+## Folder structure
+
+The `config` folder contains all necessary kubernetes and [kustomize](https://kustomize.io) manifests
 
 Manifests:
 * `config/ops/rbac` - RBAC manifests
@@ -16,7 +17,19 @@ Manifests:
 * `config/apps/` - Operator deployment
 * `config/samples/` - Example RedisCluster deployment
 
-Deploy the operator and a sample RedisCluster resource:
+## How to run the operator
+
+1. Create a namespace to deploy your redis operator in
+
+```
+kubectl create ns my-redis-operator
+```
+
+2. Change the namespace in kustomize config
+    1. In `config/apps/kustomization.yaml` set `namespace` to `my-redis-operator`
+    2. In `config/ops/rbac/role_binding.yaml` set the `ServiceAccount` namespace to `my-redis-operator`
+
+3. Deploy the operator and a sample `RedisCluster` resource:
 
 ```
 kustomize build config/ops/crd | kubectl apply -f -
