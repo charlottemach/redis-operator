@@ -311,7 +311,7 @@ func (r *RedisClusterReconciler) CreateMonitoringDeployment(ctx context.Context,
 		Spec: v1.DeploymentSpec{
 			Template: *rediscluster.Spec.Monitoring,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{redis.RedisClusterLabel: req.Name, redis.RedisClusterComponentLabel: "monitoring"},
+				MatchLabels: map[string]string{redis.RedisClusterLabel: req.Name, r.GetStatefulSetSelectorLabel(rediscluster): "monitoring"},
 			},
 			Replicas: pointer.Int32Ptr(1),
 		},
@@ -451,4 +451,20 @@ func containsString(slice []string, s string) bool {
 		}
 	}
 	return false
+}
+
+func (r *RedisClusterReconciler) GetStatefulSetSelectorLabel(rdcl *v1alpha1.RedisCluster) string {
+	err, sset := r.FindExistingStatefulSet(context.TODO(), reconcile.Request{NamespacedName: types.NamespacedName{
+		Name:      rdcl.Name,
+		Namespace: rdcl.Namespace,
+	}})
+	if err != nil {
+		return ""
+	}
+	if sset.Spec.Template.Labels[redis.RedisClusterComponentLabel] != "" {
+		// new label
+		return redis.RedisClusterComponentLabel
+	} else {
+		return "app"
+	}
 }

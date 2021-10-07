@@ -582,10 +582,11 @@ func (r *RedisClusterReconciler) GetRedisClient(ctx context.Context, ip string, 
 
 func (r *RedisClusterReconciler) GetRedisClusterPods(ctx context.Context, redisCluster *v1alpha1.RedisCluster) *corev1.PodList {
 	allPods := &corev1.PodList{}
+
 	labelSelector := labels.SelectorFromSet(
 		map[string]string{
-			redis.RedisClusterLabel:          redisCluster.Name,
-			redis.RedisClusterComponentLabel: "redis",
+			redis.RedisClusterLabel:                     redisCluster.Name,
+			r.GetStatefulSetSelectorLabel(redisCluster): "redis",
 		},
 	)
 
@@ -601,8 +602,8 @@ func (r *RedisClusterReconciler) GetReadyNodes(ctx context.Context, redisCluster
 	allPods := &corev1.PodList{}
 	labelSelector := labels.SelectorFromSet(
 		map[string]string{
-			redis.RedisClusterLabel:          redisCluster.GetName(),
-			redis.RedisClusterComponentLabel: "redis",
+			redis.RedisClusterLabel:                     redisCluster.GetName(),
+			r.GetStatefulSetSelectorLabel(redisCluster): "redis",
 		},
 	)
 
