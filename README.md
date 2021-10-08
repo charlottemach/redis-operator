@@ -24,6 +24,7 @@ Manifests:
 1. make
 2. kustomize - run `make kustomize` to install local kustomize version
 3. kubectl with configured access to create CRD, namespaces, deployments
+4. If on macos - install linux compatible utils - `brew install coreutils`, as makefile uses linux version of sed
 
 The easiest way to run the operator is to run make command:
 ```
