@@ -174,5 +174,5 @@ int-test-apply:
 	kubectl apply -f config/test/tests.yaml
 
 .PHONY=int-test
-int-test: int-test-generate int-test-replace int-test-apply
+int-test: kustomize int-test-generate int-test-replace int-test-apply
 
