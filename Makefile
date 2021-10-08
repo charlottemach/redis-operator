@@ -163,7 +163,7 @@ int-test-generate:
 	$(KUSTOMIZE) build > tests.yaml
 
 int-test-replace: 
-	$(SED) -i 's/default/$(NAMESPACE)/' config/test/tests.yaml
+	$(SED) -i.bak 's/default/$(NAMESPACE)/' config/test/tests.yaml; rm config/test/tests.yaml.bak
 
 int-test-clean:
 	-kubectl delete -f config/test/tests.yaml
