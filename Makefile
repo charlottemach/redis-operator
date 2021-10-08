@@ -160,7 +160,7 @@ SED = $(shell which sed)
 
 int-test-generate:
 	cd config/test; $(KUSTOMIZE) edit set image ghcr.io/containersolutions/redis-operator=${IMG}; \
-	kubectl kustomize > tests.yaml
+	$(KUSTOMIZE) build > tests.yaml
 
 int-test-replace: 
 	$(SED) -i 's#default#$(NAMESPACE)#' config/test/tests.yaml
@@ -170,7 +170,7 @@ int-test-clean:
 	-rm config/test/tests.yaml
 
 int-test-apply:
-	kubectl kustomize config/ops/crd/ | kubectl apply -f -
+	$(KUSTOMIZE) build config/ops/crd/ | kubectl apply -f -
 	kubectl apply -f config/test/tests.yaml
 
 .PHONY=int-test
