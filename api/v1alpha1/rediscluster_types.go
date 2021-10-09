@@ -21,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var StatusUpgrading = "Upgrading"
 var StatusScalingDown = "ScalingDown"
 var StatusScalingUp = "ScalingUp"
 var StatusReady = "Ready"

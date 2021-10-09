@@ -178,6 +178,9 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 	case v1alpha1.StatusReady:
 		r.CheckConfigurationStatus(ctx, redisCluster)
 		r.UpdateScalingStatus(ctx, redisCluster)
+		r.UpdateUpgradingStatus(ctx, redisCluster)
+	case v1alpha1.StatusUpgrading:
+		r.UpgradeCluster(ctx, redisCluster)
 	case v1alpha1.StatusScalingDown:
 		err := r.ScaleCluster(ctx, redisCluster)
 		if err != nil {
@@ -196,6 +199,7 @@ func (r *RedisClusterReconciler) ReconcileClusterObject(ctx context.Context, req
 		}
 		r.UpdateScalingStatus(ctx, redisCluster)
 		requeue = true
+
 	case v1alpha1.StatusError:
 		// todo: try to recover from error. Check configuration status?
 		r.Recorder.Event(redisCluster, "Warning", "ClusterError", "Cluster error recorded.")
@@ -244,7 +248,6 @@ func (r *RedisClusterReconciler) CheckConfigurationStatus(ctx context.Context, r
 		redisCluster.Status.Status = v1alpha1.StatusConfiguring
 		r.Log.Info("CheckConfigurationStatus - slots assigned != slots  ok", "slots_ok", slots_ok, "slots_assigned", slots_assigned)
 	}
-
 }
 
 // TODO: swap return values
@@ -338,7 +341,6 @@ func (r *RedisClusterReconciler) CreateStatefulSet(ctx context.Context, req ctrl
 			statefulSet.Labels[k] = v
 			statefulSet.Spec.Template.Labels[k] = v
 		}
-
 	}
 
 	if spec.Resources != nil {

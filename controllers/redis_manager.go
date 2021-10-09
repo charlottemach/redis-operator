@@ -2,6 +2,9 @@ package controllers
 
 import (
 	"errors"
+	v1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/util/retry"
 	"math"
 	"reflect"
 	"strconv"
@@ -141,6 +144,240 @@ func (r *RedisClusterReconciler) UpdateScalingStatus(ctx context.Context, redisC
 	}
 
 	return nil
+}
+
+func (r *RedisClusterReconciler) UpdateUpgradingStatus(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
+	err, statefulSet := r.FindExistingStatefulSet(ctx, controllerruntime.Request{NamespacedName: types.NamespacedName{Name: redisCluster.Name, Namespace: redisCluster.Namespace}})
+	if err != nil {
+		return err
+	}
+
+	err, configMap := r.FindExistingConfigMap(ctx, controllerruntime.Request{NamespacedName: types.NamespacedName{Name: redisCluster.Name, Namespace: redisCluster.Namespace}})
+	if err != nil {
+		return err
+	}
+
+	// Check whether the redis configuration has changed,
+	// as this will constitute a cluster upgrade
+	desiredConfig := redis.MergeWithDefaultConfig(redis.ConfigStringToMap(redisCluster.Spec.Config))
+	observedConfig := redis.ConfigStringToMap(configMap.Data["redis.conf"])
+	if !reflect.DeepEqual(observedConfig, desiredConfig) {
+		r.Log.Info("Cluster Upgrade Issued", "reason", "Redis Config Changed")
+		redisCluster.Status.Status = v1alpha1.StatusUpgrading
+		return nil
+	}
+
+	// Check whether any upgradeable object changes have been made.
+	// Any change in these attributes or properties will constitute a live upgrade.
+	desiredResources := *(redisCluster.Spec.Resources)
+	observedResources := statefulSet.Spec.Template.Spec.Containers[0].Resources
+	if !reflect.DeepEqual(observedResources, desiredResources) {
+		r.Log.Info("Cluster Upgrade Issued", "reason", "Redis Resource Requests & Limits Changed", "observed", observedResources, "desired", desiredResources)
+		redisCluster.Status.Status = v1alpha1.StatusUpgrading
+		return nil
+	}
+
+	// Check whether any upgradeable object changes have been made.
+	// Any change in these attributes or properties will constitute a live upgrade.
+	desiredImage := redisCluster.Spec.Image
+	observedImage := statefulSet.Spec.Template.Spec.Containers[0].Image
+	if observedImage != desiredImage {
+		r.Log.Info("Cluster Upgrade Issued", "reason", "Redis Image Changed", "observed", observedImage, "desired", desiredImage)
+		redisCluster.Status.Status = v1alpha1.StatusUpgrading
+		return nil
+	}
+
+	// Temporary line to force cluster upgrade
+	//redisCluster.Status.Status = v1alpha1.StatusUpgrading
+	redisCluster.Status.Status = v1alpha1.StatusReady
+
+	return nil
+}
+
+func (r *RedisClusterReconciler) UpgradeCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
+	err, configMap := r.FindExistingConfigMap(ctx, controllerruntime.Request{NamespacedName: types.NamespacedName{Name: redisCluster.Name, Namespace: redisCluster.Namespace}})
+	if err != nil {
+		return err
+	}
+	configMap.Data["redis.conf"] = redis.MapToConfigString(redis.MergeWithDefaultConfig(redis.ConfigStringToMap(redisCluster.Spec.Config)))
+	r.Log.Info("Updating configmap", "configmap", configMap)
+	err = r.Client.Update(ctx, configMap)
+	if err != nil {
+		r.Log.Error(err, "Error when creating configmap")
+		return err
+	}
+
+	req := controllerruntime.Request{NamespacedName: types.NamespacedName{Name: redisCluster.Name, Namespace: redisCluster.Namespace}}
+
+	statefulSet, err := r.CreateStatefulSet(ctx, req, redisCluster.Spec, redisCluster.ObjectMeta.GetLabels(), configMap)
+	if err != nil {
+		return err
+	}
+
+	var localPartition int32
+	for partition := int(*(statefulSet.Spec.Replicas)) - 1; partition >= 0; partition-- {
+		r.Log.Info("Looping paritions", "partition", partition)
+		//	r.Log.Info("Upgrading with partition", "partition", partition)
+
+		// First we need to rebalance away from this node
+		podName := types.NamespacedName{Name: fmt.Sprintf("%s-%d", statefulSet.Name, partition), Namespace: redisCluster.Namespace}
+		pod := corev1.Pod{}
+		err = r.Client.Get(ctx, podName, &pod)
+		if err != nil {
+			r.Log.Error(err, "Could not find pod for partition node")
+		}
+
+		redisSecret, _ := r.GetRedisSecret(redisCluster)
+		redisClient := r.GetRedisClient(ctx, pod.Status.PodIP, redisSecret)
+		defer redisClient.Close()
+		nodeId, err := redisClient.Do(ctx, "cluster", "myid").Result()
+		if err != nil {
+			r.Log.Error(err, "Could not find node id for pod")
+		}
+		weights := map[string]int{}
+		weights[nodeId.(string)] = 0
+		err = r.RebalanceCluster(ctx, redisCluster, weights)
+		if err != nil {
+			r.Log.Error(err, "Could not move slots away from node")
+		}
+
+		localPartition = int32(partition)
+		statefulSet.Spec.UpdateStrategy = v1.StatefulSetUpdateStrategy{
+			Type:          v1.RollingUpdateStatefulSetStrategyType,
+			RollingUpdate: &v1.RollingUpdateStatefulSetStrategy{Partition: &localPartition},
+		}
+		statefulSet, err = r.UpdateStatefulSet(ctx, statefulSet)
+		if err != nil {
+			r.Log.Error(err, "Could not update partition for Statefulset")
+		}
+
+		// Let's wait for the StatefulSet to start recreating the pod before we check for it's readiness
+		time.Sleep(time.Second*5)
+
+		var current int
+		err = wait.Poll(5*time.Second, 5*time.Minute,
+			func() (bool, error) {
+				pods := &corev1.PodList{}
+				labelSelector := labels.SelectorFromSet(
+					map[string]string{
+						redis.RedisClusterLabel: redisCluster.Name,
+						"app":                   "redis",
+					},
+				)
+
+				err = r.Client.List(ctx, pods, &client.ListOptions{
+					Namespace:     redisCluster.Namespace,
+					LabelSelector: labelSelector,
+				})
+				if err != nil {
+					r.Log.Error(err, "Could not wait for pods to become ready")
+					return false, err
+				}
+				current = 0
+				for _, pod := range pods.Items {
+					flag, err := r.PodRunningReady(&pod)
+					fmt.Println("Checking pod condition", flag, err)
+
+					if err == nil && flag == true {
+						current++
+						fmt.Println("Increasing current count", current)
+					}
+				}
+				if current != int(*(statefulSet.Spec.Replicas)) {
+					r.Log.Info(fmt.Sprintf("Got %v pods running and ready, expect: %v", current, int(*(statefulSet.Spec.Replicas))))
+					return false, nil
+				}
+				return true, nil
+			})
+		if err != nil {
+			r.Log.Error(err, "Could not upgrade cluster")
+		}
+		//r.UpdateRedisCluster(ctx, redisCluster)
+		//	r.Log.Info("Upgrade completed for partition", "partition", partition)
+	}
+
+	// We want to sleep to make sure the k8s client gets a chance to update the pod list,
+	// before we try to rebalance again.
+	time.Sleep(5*time.Second)
+	// Now for one last rebalance to make sure everything is up and running correctly.
+	err = r.RebalanceCluster(ctx, redisCluster, map[string]int{})
+
+	redisCluster.Status.Status = v1alpha1.StatusReady
+
+	return nil
+}
+
+// PodRunningReady checks whether pod p's phase is running and it has a ready
+// condition of status true.
+func (r *RedisClusterReconciler) PodRunningReady(p *corev1.Pod) (bool, error) {
+	// Check the phase is running.
+	if p.Status.Phase != corev1.PodRunning {
+		return false, fmt.Errorf("want pod '%s' on '%s' to be '%v' but was '%v'",
+			p.ObjectMeta.Name, p.Spec.NodeName, corev1.PodRunning, p.Status.Phase)
+	}
+	// Check the ready condition is true.
+	_, condition := r.GetPodCondition(&p.Status, corev1.PodReady)
+	fmt.Println(condition, condition.Type, condition.Status)
+	if !(condition != nil && condition.Status == corev1.ConditionTrue) {
+		return false, fmt.Errorf("pod '%s' on '%s' didn't have condition {%v %v}; conditions: %v",
+			p.ObjectMeta.Name, p.Spec.NodeName, corev1.PodReady, corev1.ConditionTrue, p.Status.Conditions)
+	}
+	return true, nil
+}
+
+func (r *RedisClusterReconciler) GetPodCondition(status *corev1.PodStatus, conditionType corev1.PodConditionType) (int, *corev1.PodCondition) {
+	if status == nil {
+		return -1, nil
+	}
+	for i := range status.Conditions {
+		if status.Conditions[i].Type == conditionType {
+			return i, &status.Conditions[i]
+		}
+	}
+	return -1, nil
+}
+
+func (r *RedisClusterReconciler) UpdateStatefulSet(ctx context.Context, statefulSet *v1.StatefulSet) (*v1.StatefulSet, error) {
+	refreshedStatefulSet := &v1.StatefulSet{}
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		time.Sleep(time.Second * 1)
+		// get a fresh rediscluster to minimize conflicts
+		err := r.Client.Get(ctx, types.NamespacedName{Namespace: statefulSet.Namespace, Name: statefulSet.Name}, refreshedStatefulSet)
+		if err != nil {
+			r.Log.Error(err, "Error getting a refreshed RedisCluster before updating it. It may have been deleted?")
+			return err
+		}
+		// update the slots
+		refreshedStatefulSet.Spec = statefulSet.Spec
+		var updateErr = r.Client.Update(ctx, refreshedStatefulSet)
+		return updateErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return refreshedStatefulSet, nil
+}
+
+func (r *RedisClusterReconciler) UpdateRedisCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) (*v1alpha1.RedisCluster, error) {
+	refreshedRedisCluster := &v1alpha1.RedisCluster{}
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		time.Sleep(time.Second * 1)
+		// get a fresh rediscluster to minimize conflicts
+		err := r.Client.Get(ctx, types.NamespacedName{Namespace: redisCluster.Namespace, Name: redisCluster.Name}, refreshedRedisCluster)
+		if err != nil {
+			r.Log.Error(err, "Error getting a refreshed RedisCluster before updating it. It may have been deleted?")
+			return err
+		}
+		// update the slots
+		refreshedRedisCluster.Spec = redisCluster.Spec
+		refreshedRedisCluster.Status = redisCluster.Status
+		var updateErr = r.Client.Status().Update(ctx, refreshedRedisCluster)
+		return updateErr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return refreshedRedisCluster, nil
 }
 
 func (r *RedisClusterReconciler) ScaleCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster) error {
@@ -360,7 +597,11 @@ func (r *RedisClusterReconciler) ForgetUnnecessaryNodes(ctx context.Context, red
 
 func (r *RedisClusterReconciler) GetClusterNodes(ctx context.Context, redisCluster *v1alpha1.RedisCluster) (map[string]*redis.ClusterNode, error) {
 	nodeList := make(map[string]*redis.ClusterNode, 0)
-	for _, node := range redisCluster.Status.Nodes {
+	nodes, err := r.GetReadyNodes(ctx, redisCluster)
+	if err != nil {
+		r.Log.Error(err, "Could not get ready nodes for rebalancing")
+	}
+	for _, node := range nodes {
 		clusterNode := redis.NewClusterNode(fmt.Sprintf("%s:%s", node.IP, "6379"))
 		err := clusterNode.LoadInfo(false)
 		if err != nil {
@@ -489,7 +730,11 @@ func (r *RedisClusterReconciler) EnsureClusterSlotsStable(ctx context.Context, r
 func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisCluster *v1alpha1.RedisCluster, weights map[string]int) error {
 	r.Log.Info("Rebalancing Cluster")
 	nodeList := make(map[string]*redis.ClusterNode, 0)
-	for nodeId, node := range redisCluster.Status.Nodes {
+	nodes, err := r.GetReadyNodes(ctx, redisCluster)
+	if err != nil {
+		r.Log.Error(err, "Could not get ready nodes for rebalancing")
+	}
+	for nodeId, node := range nodes {
 		clusterNode := redis.NewClusterNode(fmt.Sprintf("%s:%s", node.IP, "6379"))
 		err := clusterNode.LoadInfo(false)
 		if err != nil {
@@ -530,7 +775,7 @@ func (r *RedisClusterReconciler) RebalanceCluster(ctx context.Context, redisClus
 	r.Log.Info("Waiting for slot moves", "nodeCount", len(slotMoveSequence))
 	waitGroup.Wait()
 	r.Log.Info("Done waiting for slot moves")
-	err := r.EnsureClusterSlotsStable(ctx, redisCluster)
+	err = r.EnsureClusterSlotsStable(ctx, redisCluster)
 	if err != nil {
 		r.Log.Error(err, "Cannot fix slots")
 		return err
