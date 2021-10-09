@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"github.com/containersolutions/redis-operator/internal/utils"
 	v1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
@@ -316,25 +317,13 @@ func (r *RedisClusterReconciler) PodRunningReady(p *corev1.Pod) (bool, error) {
 			p.ObjectMeta.Name, p.Spec.NodeName, corev1.PodRunning, p.Status.Phase)
 	}
 	// Check the ready condition is true.
-	_, condition := r.GetPodCondition(&p.Status, corev1.PodReady)
+	_, condition := utils.GetPodCondition(&p.Status, corev1.PodReady)
 	fmt.Println(condition, condition.Type, condition.Status)
 	if !(condition != nil && condition.Status == corev1.ConditionTrue) {
 		return false, fmt.Errorf("pod '%s' on '%s' didn't have condition {%v %v}; conditions: %v",
 			p.ObjectMeta.Name, p.Spec.NodeName, corev1.PodReady, corev1.ConditionTrue, p.Status.Conditions)
 	}
 	return true, nil
-}
-
-func (r *RedisClusterReconciler) GetPodCondition(status *corev1.PodStatus, conditionType corev1.PodConditionType) (int, *corev1.PodCondition) {
-	if status == nil {
-		return -1, nil
-	}
-	for i := range status.Conditions {
-		if status.Conditions[i].Type == conditionType {
-			return i, &status.Conditions[i]
-		}
-	}
-	return -1, nil
 }
 
 func (r *RedisClusterReconciler) UpdateStatefulSet(ctx context.Context, statefulSet *v1.StatefulSet) (*v1.StatefulSet, error) {
